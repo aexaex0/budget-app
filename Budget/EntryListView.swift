@@ -38,37 +38,24 @@ struct EntryListView: View {
     var body: some View {
         let tr = store.tr
         List {
-            Section {
-                ForEach(recurring) { entry in entryButton(entry, tr) }
-                    .onDelete { delete(recurring, $0) }
-                if recurring.isEmpty {
-                    hint(tr("Még nincs havi tétel. Koppints a + gombra.",
-                            "No monthly items yet. Tap +."))
+            if !recurring.isEmpty || !supportsOneTime {
+                Section {
+                    ForEach(recurring) { entry in entryButton(entry, tr) }
+                        .onDelete { delete(recurring, $0) }
+                } header: {
+                    if supportsOneTime {
+                        sectionHeader(icon: "arrow.triangle.2.circlepath",
+                                      title: tr("Havonta", "Monthly"))
+                    }
                 }
-            } header: {
-                sectionHeader(
-                    icon: "arrow.triangle.2.circlepath",
-                    title: tr("Havonta megújul", "Renews every month"),
-                    subtitle: tr("Minden hónapban automatikusan beleszámít.",
-                                 "Counted automatically every month.")
-                )
             }
 
-            if supportsOneTime {
+            if supportsOneTime && !oneTime.isEmpty {
                 Section {
                     ForEach(oneTime) { entry in entryButton(entry, tr) }
                         .onDelete { delete(oneTime, $0) }
-                    if oneTime.isEmpty {
-                        hint(tr("Nincs egyszeri összeg. A + gombbal tudsz hozzáadni.",
-                                "No one-time amounts. Add one with +."))
-                    }
                 } header: {
-                    sectionHeader(
-                        icon: "1.circle",
-                        title: tr("Egyszeri összegek", "One-time amounts"),
-                        subtitle: tr("Csak abban a hónapban számítanak, amelyiknél megadtad.",
-                                     "Only counted in the month you set.")
-                    )
+                    sectionHeader(icon: "1.circle", title: tr("Egyszeri", "One-time"))
                 }
             }
         }
@@ -78,6 +65,10 @@ struct EntryListView: View {
         .navigationTitle(kind.plural(tr))
         .animation(.snappy, value: entries.count)
         .safeAreaInset(edge: .top, spacing: 0) { summaryCard(tr) }
+        .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 76) }
+        .overlay(alignment: .bottom) {
+            addButton(tr).padding(.bottom, 12)
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 if kind == .expense {
@@ -93,30 +84,6 @@ struct EntryListView: View {
                     }
                 }
             }
-            ToolbarItem(placement: .primaryAction) {
-                if supportsOneTime {
-                    Menu {
-                        Button {
-                            newEntry = NewEntry(recurring: true)
-                        } label: {
-                            Label(tr("Havi ismétlődő", "Monthly (repeats)"),
-                                  systemImage: "arrow.triangle.2.circlepath")
-                        }
-                        Button {
-                            newEntry = NewEntry(recurring: false)
-                        } label: {
-                            Label(tr("Egyszeri összeg", "One-time amount"), systemImage: "1.circle")
-                        }
-                    } label: {
-                        Label(tr("Új", "New"), systemImage: "plus")
-                    }
-                } else {
-                    Button(tr("Új", "New"), systemImage: "plus") {
-                        Haptics.tap()
-                        newEntry = NewEntry(recurring: true)
-                    }
-                }
-            }
         }
         .sheet(item: $newEntry) { EntryEditor(kind: kind, entry: nil, recurring: $0.recurring) }
         .sheet(item: $editing) { EntryEditor(kind: kind, entry: $0) }
@@ -124,6 +91,42 @@ struct EntryListView: View {
     }
 
     // MARK: Részek
+
+    /// Lebegő + gomb lent, középen.
+    @ViewBuilder
+    private func addButton(_ tr: Tr) -> some View {
+        if supportsOneTime {
+            Menu {
+                Button {
+                    newEntry = NewEntry(recurring: true)
+                } label: {
+                    Label(tr("Havi ismétlődő", "Monthly"), systemImage: "arrow.triangle.2.circlepath")
+                }
+                Button {
+                    newEntry = NewEntry(recurring: false)
+                } label: {
+                    Label(tr("Egyszeri", "One-time"), systemImage: "1.circle")
+                }
+            } label: {
+                plusIcon
+            }
+        } else {
+            Button {
+                Haptics.tap()
+                newEntry = NewEntry(recurring: true)
+            } label: {
+                plusIcon
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var plusIcon: some View {
+        Image(systemName: "plus")
+            .font(.title2.weight(.semibold))
+            .frame(width: 58, height: 58)
+            .glassEffect(.regular.interactive(), in: .circle)
+    }
 
     private func summaryCard(_ tr: Tr) -> some View {
         VStack(spacing: 12) {
@@ -143,10 +146,8 @@ struct EntryListView: View {
             }
             if supportsOneTime {
                 HStack(spacing: 10) {
-                    chip(icon: "arrow.triangle.2.circlepath",
-                         title: tr("Havonta", "Monthly"), value: recurringTotal)
-                    chip(icon: "1.circle",
-                         title: tr("Egyszeri", "One-time"), value: oneTimeThisMonth)
+                    chip(icon: "arrow.triangle.2.circlepath", value: recurringTotal)
+                    chip(icon: "1.circle", value: oneTimeThisMonth)
                 }
             }
         }
@@ -158,43 +159,27 @@ struct EntryListView: View {
         .padding(.bottom, 10)
     }
 
-    private func chip(icon: String, title: String, value: Double) -> some View {
-        HStack(spacing: 6) {
+    private func chip(icon: String, value: Double) -> some View {
+        HStack(spacing: 8) {
             Image(systemName: icon).font(.caption).foregroundStyle(kind.color)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title).font(.caption2).foregroundStyle(.secondary)
-                Text(value.ft)
-                    .font(.footnote.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
+            Text(value.ft)
+                .font(.footnote.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 14))
     }
 
-    private func sectionHeader(icon: String, title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Label(title, systemImage: icon)
-                .font(.subheadline.bold())
-                .foregroundStyle(.primary)
-            Text(subtitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .textCase(nil)
-        .padding(.top, 8)
-    }
-
-    private func hint(_ text: String) -> some View {
-        Text(text)
-            .font(.footnote)
+    private func sectionHeader(icon: String, title: String) -> some View {
+        Label(title, systemImage: icon)
+            .font(.subheadline.bold())
             .foregroundStyle(.secondary)
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
+            .textCase(nil)
+            .padding(.top, 8)
     }
 
     private func entryButton(_ entry: Entry, _ tr: Tr) -> some View {
@@ -231,20 +216,18 @@ struct EntryListView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.name).lineLimit(2)
                     if kind == .subscription {
-                        Label(tr("Megújul: \(entry.renewalDay). nap", "Renews: day \(entry.renewalDay)"),
-                              systemImage: "arrow.triangle.2.circlepath")
+                        Label("\(entry.renewalDay).", systemImage: "calendar")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                    } else if entry.isRecurring {
-                        Label(tr("Minden hónapban", "Every month"),
-                              systemImage: "arrow.triangle.2.circlepath")
+                    } else if !entry.isRecurring {
+                        Label(shortDate(entry.date, english: store.isEnglish), systemImage: "calendar")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                    } else {
-                        let day = shortDate(entry.date, english: store.isEnglish)
-                        Label(tr("Egyszeri • \(day)", "One-time • \(day)"), systemImage: "1.circle")
+                    }
+                    if kind == .expense, let cat = categories.first(where: { $0.id == entry.categoryID }) {
+                        Label(cat.name, systemImage: cat.symbol)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(cat.color)
                     }
                 }
                 Spacer(minLength: 8)
@@ -253,22 +236,16 @@ struct EntryListView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
-            if kind == .expense, let cat = categories.first(where: { $0.id == entry.categoryID }) {
-                Label(cat.name, systemImage: cat.symbol)
-                    .font(.caption)
-                    .foregroundStyle(cat.color)
-            }
             if kind == .saving, entry.targetAmount > 0 {
                 ProgressView(value: min(entry.savedSoFar, entry.targetAmount),
                              total: entry.targetAmount)
                     .tint(kind.color)
                 let remaining = max(entry.targetAmount - entry.savedSoFar, 0)
                 if remaining == 0 {
-                    Text(tr("Cél elérve 🎉", "Goal reached 🎉")).font(.caption).foregroundStyle(.secondary)
+                    Text("🎉").font(.caption)
                 } else if entry.amount > 0 {
                     let months = Int((remaining / entry.amount).rounded(.up))
-                    Text(tr("Még \(remaining.ft) • kb. \(months) hónap",
-                            "\(remaining.ft) to go • ~\(months) months"))
+                    Text(tr("\(remaining.ft) · \(months) hó", "\(remaining.ft) · \(months) mo"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }

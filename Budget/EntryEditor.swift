@@ -44,12 +44,6 @@ struct EntryEditor: View {
                         if !recurring {
                             DatePicker(tr("Mikor", "When"), selection: $date, displayedComponents: .date)
                         }
-                    } footer: {
-                        Text(recurring
-                             ? tr("Minden hónapban automatikusan beleszámít.",
-                                  "Counted automatically every month.")
-                             : tr("Csak a kiválasztott hónapban számít bele.",
-                                  "Only counted in the selected month."))
                     }
                 }
                 Section {

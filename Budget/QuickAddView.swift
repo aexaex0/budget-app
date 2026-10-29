@@ -27,7 +27,7 @@ struct QuickAddView: View {
                     TextField(tr("Összeg (Ft)", "Amount (Ft)"), value: $amount, format: .number)
                         .keyboardType(.decimalPad)
                         .font(.title2.bold())
-                    TextField(tr("Megjegyzés (nem kötelező)", "Note (optional)"), text: $note)
+                    TextField(tr("Megjegyzés", "Note"), text: $note)
                     if kind == .expense {
                         Picker(tr("Kategória", "Category"), selection: $categoryID) {
                             Text(tr("Nincs", "None")).tag("")
@@ -39,9 +39,6 @@ struct QuickAddView: View {
                 }
                 Section {
                     DatePicker(tr("Mikor", "When"), selection: $date, displayedComponents: .date)
-                } footer: {
-                    Text(tr("Egyszeri összeg: csak a kiválasztott hónapban számít bele.",
-                            "One-time amount: only counted in the selected month."))
                 }
             }
             .scrollContentBackground(.hidden)

@@ -28,10 +28,11 @@ struct SpendingMoneyCard: View {
             }
             ProgressView(value: progress)
                 .tint(progress > 0.9 ? Color.red : Color.orange)
-            Text(tr("Elköltve: \(spent.ft) / \(allowance.ft). A fix tételek (lakás, előfizetések, megtakarítás) után ennyit költhetsz; az egyszeri kiadásaid ebből fogynak.",
-                    "Spent: \(spent.ft) / \(allowance.ft). This is what you can spend after fixed items (housing, subscriptions, savings); one-time expenses come out of it."))
+            Text("\(spent.ft) / \(allowance.ft)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -42,23 +43,26 @@ struct SpendingMoneyCard: View {
 // MARK: - Piggy Bank
 
 struct PiggyBankCard: View {
-    @EnvironmentObject private var store: ThemeStore
     let saved: Double
     let target: Double
     let onDeposit: () -> Void
 
     var body: some View {
-        let tr = store.tr
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center) {
                 Label("Piggy Bank", systemImage: "banknote.fill").font(.headline)
                 Spacer(minLength: 8)
-                Button(tr("Befizetés / kivétel", "Deposit / withdraw"), systemImage: "plus.forwardslash.minus") {
+                Button {
                     Haptics.tap()
                     onDeposit()
+                } label: {
+                    Image(systemName: "plus.forwardslash.minus")
+                        .font(.title3)
+                        .frame(width: 44, height: 44)
+                        .glassEffect(.regular.interactive(), in: .circle)
                 }
-                .buttonStyle(.glass)
-                .font(.footnote)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Deposit / withdraw")
             }
             Text(saved.ft)
                 .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -68,14 +72,6 @@ struct PiggyBankCard: View {
                 .animation(.snappy, value: saved)
             if target > 0 {
                 ProgressView(value: min(saved, target), total: target).tint(.blue)
-                Text(tr("Összes cél: \(target.ft)", "All goals: \(target.ft)"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text(tr("Eddig félretett összeg az összes megtakarításból.",
-                        "Total saved so far across all your savings."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .padding(18)
@@ -102,28 +98,21 @@ struct DepositView: View {
             Form {
                 Section {
                     Picker("", selection: $withdraw) {
-                        Text(tr("Befizetés", "Deposit")).tag(false)
-                        Text(tr("Kivétel", "Withdraw")).tag(true)
+                        Image(systemName: "plus").tag(false)
+                        Image(systemName: "minus").tag(true)
                     }
                     .pickerStyle(.segmented)
                     TextField(tr("Összeg (Ft)", "Amount (Ft)"), value: $amount, format: .number)
                         .keyboardType(.decimalPad)
                         .font(.title2.bold())
                 }
-                if !goals.isEmpty {
-                    Section(tr("Melyik célhoz", "Which goal")) {
+                if goals.count > 1 {
+                    Section {
                         Picker(tr("Cél", "Goal"), selection: $selectedID) {
                             ForEach(goals) { g in
                                 Text(g.name).tag(Optional(g.persistentModelID))
                             }
                         }
-                    }
-                } else {
-                    Section {
-                        Text(tr("Még nincs megtakarítási cél, ezért létrehozok egy \"Piggy Bank\" tételt.",
-                                "No savings goal yet, so a \"Piggy Bank\" item will be created."))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -180,20 +169,15 @@ struct CategoryBreakdownCard: View {
         let tr = store.tr
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label(tr("Kiadás kategóriánként", "Spending by category"), systemImage: "tag.fill")
+                Label(tr("Kategóriák", "Categories"), systemImage: "tag.fill")
                     .font(.headline)
                 Spacer(minLength: 8)
                 NavigationLink {
                     CategoriesView()
                 } label: {
-                    Text(tr("Kezelés", "Manage")).font(.footnote)
+                    Image(systemName: "slider.horizontal.3")
+                        .frame(width: 36, height: 36)
                 }
-            }
-            if rows.isEmpty {
-                Text(tr("Még nincs kategorizált kiadás. A Kiadások fülön adj meg kategóriát a tételeknél.",
-                        "No categorized spending yet. Pick a category when adding an expense."))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
             ForEach(rows) { r in rowView(r, tr) }
         }
@@ -219,8 +203,7 @@ struct CategoryBreakdownCard: View {
             if r.limit > 0 {
                 ProgressView(value: min(r.spent, r.limit), total: r.limit).tint(tint)
                 if over {
-                    Label(tr("Túllépve: +\((r.spent - r.limit).ft)", "Over by \((r.spent - r.limit).ft)"),
-                          systemImage: "exclamationmark.triangle.fill")
+                    Label("+\((r.spent - r.limit).ft)", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
@@ -251,7 +234,7 @@ struct HistoryChartCard: View {
         let names: [String] = [tr("Bevétel", "Income"), tr("Kiadás", "Spent"), tr("Félretett", "Saved")]
         let colors: [Color] = [.green, .orange, .blue]
         VStack(alignment: .leading, spacing: 12) {
-            Label(tr("Utolsó 6 hónap", "Last 6 months"), systemImage: "chart.bar.fill")
+            Label(tr("6 hónap", "6 months"), systemImage: "chart.bar.fill")
                 .font(.headline)
             Chart(points) { p in
                 BarMark(x: .value("Hónap", p.label), y: .value("Ft", p.value))

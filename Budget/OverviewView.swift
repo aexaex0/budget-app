@@ -182,8 +182,7 @@ struct OverviewView: View {
                             .contentTransition(.numericText(value: left))
                             .animation(.snappy, value: left)
                         if left < 0 {
-                            Label(tr("Többet költesz, mint amennyit keresel",
-                                     "You spend more than you earn"),
+                            Label(tr("Mínuszban", "Negative"),
                                   systemImage: "exclamationmark.triangle.fill")
                                 .font(.footnote)
                                 .foregroundStyle(.red)
@@ -199,7 +198,7 @@ struct OverviewView: View {
 
                     if !overLimit.isEmpty {
                         let names = overLimit.map { $0.name }.joined(separator: ", ")
-                        Label(tr("Túlléptél egy limitet: \(names)", "Over limit: \(names)"),
+                        Label(tr("Limit túllépve: \(names)", "Over limit: \(names)"),
                               systemImage: "exclamationmark.triangle.fill")
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.red)
@@ -227,7 +226,9 @@ struct OverviewView: View {
                         .glassCard(28)
                     }
 
-                    CategoryBreakdownCard(rows: catRows)
+                    if !catRows.isEmpty {
+                        CategoryBreakdownCard(rows: catRows)
+                    }
 
                     if hasData {
                         HistoryChartCard(points: historyPoints(tr))

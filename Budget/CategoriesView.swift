@@ -40,9 +40,6 @@ struct CategoriesView: View {
                     Haptics.tap(.medium)
                     for i in offsets { context.delete(categories[i]) }
                 }
-            } footer: {
-                Text(tr("A limit havi összeg: ha túlléped, az Áttekintésben pirosan jelzi.",
-                        "The limit is monthly: going over it shows in red on the Overview."))
             }
         }
         .listStyle(.plain)
@@ -59,9 +56,8 @@ struct CategoriesView: View {
         }
         .overlay {
             if categories.isEmpty {
-                ContentUnavailableView(tr("Még nincs kategória", "No categories yet"),
-                                       systemImage: "tag.fill",
-                                       description: Text(tr("Koppints a + gombra.", "Tap + to add one.")))
+                ContentUnavailableView(tr("Nincs kategória", "No categories"),
+                                       systemImage: "tag.fill")
             }
         }
         .sheet(isPresented: $adding) { CategoryEditor(category: nil) }
@@ -77,11 +73,11 @@ struct CategoriesView: View {
                 .background(c.color, in: .circle)
             VStack(alignment: .leading, spacing: 2) {
                 Text(c.name).lineLimit(1)
-                Text(c.monthlyLimit > 0
-                     ? tr("Limit: \(c.monthlyLimit.ft) / hó", "Limit: \(c.monthlyLimit.ft) / month")
-                     : tr("Nincs limit", "No limit"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if c.monthlyLimit > 0 {
+                    Text(c.monthlyLimit.ft)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer(minLength: 8)
             Text(used.ft)
@@ -115,7 +111,7 @@ struct CategoryEditor: View {
                     TextField(tr("Név", "Name"), text: $name)
                     ColorPicker(tr("Szín", "Color"), selection: $color, supportsOpacity: false)
                 }
-                Section(tr("Ikon", "Icon")) {
+                Section {
                     LazyVGrid(columns: columns, spacing: 10) {
                         ForEach(CategorySeed.symbols, id: \.self) { s in
                             Button {
@@ -135,12 +131,9 @@ struct CategoryEditor: View {
                     .padding(.vertical, 4)
                 }
                 Section {
-                    TextField(tr("Havi limit (Ft, nem kötelező)", "Monthly limit (Ft, optional)"),
+                    TextField(tr("Havi limit (Ft)", "Monthly limit (Ft)"),
                               value: $limit, format: .number)
                         .keyboardType(.decimalPad)
-                } footer: {
-                    Text(tr("Ha túllépi a havi kiadás ezt az összeget, az app jelzi.",
-                            "The app warns you when monthly spending goes over this amount."))
                 }
             }
             .scrollContentBackground(.hidden)

@@ -47,10 +47,6 @@ struct ThemeSettingsView: View {
 
                     section(tr("Biztonság", "Security")) {
                         Toggle(tr("Zárolás Face ID-val", "Lock with Face ID"), isOn: $store.lockEnabled)
-                        Text(tr("Az app megnyitáskor és háttérből visszatérve kéri a Face ID-t (vagy a készülékkódot).",
-                                "Asks for Face ID (or your passcode) on open and when returning from the background."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
 
                     section(tr("Értesítések", "Notifications")) {
@@ -61,10 +57,6 @@ struct ThemeSettingsView: View {
                             }
                         }
                         Toggle(tr("Havi összegzés kész", "Monthly report ready"), isOn: $store.monthlyReport)
-                        Text(tr("Minden hónap 1-jén 9:00-kor jön az értesítés.",
-                                "The notification arrives on the 1st of each month at 9:00."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
 
                     section(tr("Kész témák", "Preset themes")) {

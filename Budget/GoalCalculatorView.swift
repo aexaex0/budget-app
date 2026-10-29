@@ -44,7 +44,7 @@ struct GoalCalculatorView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField(tr("Cél neve (pl. Nyaralás)", "Goal name (e.g. Vacation)"), text: $name)
+                    TextField(tr("Cél neve", "Goal name"), text: $name)
                     TextField(tr("Célösszeg (Ft)", "Target amount (Ft)"), value: $target, format: .number)
                         .keyboardType(.decimalPad)
                     TextField(tr("Már megvan (Ft)", "Already saved (Ft)"), value: $saved, format: .number)
@@ -88,9 +88,9 @@ struct GoalCalculatorView: View {
     private func result(_ tr: Tr) -> some View {
         let perMonth = monthlyResult
         let m = monthsResult
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             if byDeadline {
-                Text(tr("Havonta ennyit kell félretenned:", "You need to save each month:"))
+                Label(tr("Havonta", "Per month"), systemImage: "calendar")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Text(perMonth.ft)
@@ -101,32 +101,24 @@ struct GoalCalculatorView: View {
                 let end = Calendar.current.date(byAdding: .month, value: m, to: .now) ?? .now
                 let when = end.formatted(Date.FormatStyle().year().month(.wide)
                     .locale(Locale(identifier: store.isEnglish ? "en_US" : "hu_HU")))
-                Text(tr("Ennyi idő alatt éred el:", "You reach it in:"))
+                Label(when, systemImage: "calendar")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Text(tr("\(m) hónap", "\(m) months"))
                     .font(.system(size: 32, weight: .bold, design: .rounded))
-                Text(tr("Kb. \(when)", "About \(when)")).font(.footnote).foregroundStyle(.secondary)
-            } else {
-                Text(tr("Adj meg egy havi összeget.", "Enter a monthly amount."))
-                    .foregroundStyle(.secondary)
             }
 
             if perMonth > 0 {
                 if perMonth <= max(available, 0) {
-                    Label(tr("Belefér a havi megmaradásodba (\(available.ft)).",
-                             "Fits in what you have left each month (\(available.ft))."),
-                          systemImage: "checkmark.circle.fill")
+                    Label(tr("Belefér", "Fits"), systemImage: "checkmark.circle.fill")
                         .font(.footnote)
                         .foregroundStyle(.green)
                 } else {
-                    Label(tr("Több, mint amennyi most megmarad havonta (\(available.ft)).",
-                             "More than you currently have left each month (\(available.ft))."),
-                          systemImage: "exclamationmark.triangle.fill")
+                    Label(tr("Nem fér bele", "Too much"), systemImage: "exclamationmark.triangle.fill")
                         .font(.footnote)
                         .foregroundStyle(.orange)
                 }
-                Button(tr("Mentés megtakarítási célként", "Save as savings goal")) {
+                Button(tr("Mentés célként", "Save as goal")) {
                     saveGoal(perMonth, tr)
                 }
                 .buttonStyle(.glassProminent)
