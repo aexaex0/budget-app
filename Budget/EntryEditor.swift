@@ -13,14 +13,43 @@ struct EntryEditor: View {
     @State private var amount: Double?
     @State private var target: Double?
     @State private var saved: Double?
+    @State private var recurring: Bool
+    @State private var date: Date
+
+    init(kind: EntryKind, entry: Entry?, recurring: Bool = true) {
+        self.kind = kind
+        self.entry = entry
+        _recurring = State(initialValue: entry?.isRecurring ?? recurring)
+        _date = State(initialValue: entry?.date ?? Date.now)
+    }
+
+    private var supportsOneTime: Bool { kind == .income || kind == .expense }
 
     var body: some View {
         let tr = store.tr
         NavigationStack {
             Form {
+                if supportsOneTime {
+                    Section {
+                        Picker(tr("Ismétlődés", "Repeat"), selection: $recurring) {
+                            Text(tr("Minden hónapban", "Every month")).tag(true)
+                            Text(tr("Egyszeri", "One-time")).tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                        if !recurring {
+                            DatePicker(tr("Mikor", "When"), selection: $date, displayedComponents: .date)
+                        }
+                    } footer: {
+                        Text(recurring
+                             ? tr("Minden hónapban automatikusan beleszámít.",
+                                  "Counted automatically every month.")
+                             : tr("Csak a kiválasztott hónapban számít bele.",
+                                  "Only counted in the selected month."))
+                    }
+                }
                 Section {
                     TextField(tr("Név", "Name"), text: $name)
-                    TextField(tr("Havi összeg (Ft)", "Monthly amount (Ft)"), value: $amount, format: .number)
+                    TextField(amountLabel(tr), value: $amount, format: .number)
                         .keyboardType(.decimalPad)
                 }
                 if kind == .saving {
@@ -58,16 +87,27 @@ struct EntryEditor: View {
         .presentationDetents([.medium, .large])
     }
 
+    private func amountLabel(_ tr: Tr) -> String {
+        if supportsOneTime && !recurring {
+            return tr("Összeg (Ft)", "Amount (Ft)")
+        }
+        return tr("Havi összeg (Ft)", "Monthly amount (Ft)")
+    }
+
     private func save() {
         let clean = name.trimmingCharacters(in: .whitespaces)
+        let isRecurring = supportsOneTime ? recurring : true
         if let entry {
             entry.name = clean
             entry.amount = amount ?? 0
             entry.targetAmount = target ?? 0
             entry.savedSoFar = saved ?? 0
+            entry.isRecurring = isRecurring
+            entry.date = date
         } else {
             context.insert(Entry(name: clean, amount: amount ?? 0, kind: kind,
-                                 targetAmount: target ?? 0, savedSoFar: saved ?? 0))
+                                 targetAmount: target ?? 0, savedSoFar: saved ?? 0,
+                                 isRecurring: isRecurring, date: date))
         }
         Haptics.success()
         dismiss()

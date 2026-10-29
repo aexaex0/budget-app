@@ -52,6 +52,8 @@ final class Entry {
     var targetAmount: Double    // csak megtakarításnál: cél (0 = nincs)
     var savedSoFar: Double      // csak megtakarításnál: eddig félretéve
     var createdAt: Date
+    var isRecurring: Bool = true   // true: minden hónapban számít; false: csak a `date` hónapjában
+    var date: Date = Date.now      // egyszeri tételnél az időpont
 
     var kind: EntryKind {
         get { EntryKind(rawValue: kindRaw) ?? .expense }
@@ -59,12 +61,26 @@ final class Entry {
     }
 
     init(name: String, amount: Double, kind: EntryKind,
-         targetAmount: Double = 0, savedSoFar: Double = 0) {
+         targetAmount: Double = 0, savedSoFar: Double = 0,
+         isRecurring: Bool = true, date: Date = .now) {
         self.name = name
         self.amount = amount
         self.kindRaw = kind.rawValue
         self.targetAmount = targetAmount
         self.savedSoFar = savedSoFar
         self.createdAt = .now
+        self.isRecurring = isRecurring
+        self.date = date
     }
+
+    /// Beleszámít-e az adott hónapba? Ismétlődő: mindig. Egyszeri: csak a saját hónapjában.
+    func counts(in month: Date) -> Bool {
+        isRecurring || Calendar.current.isDate(date, equalTo: month, toGranularity: .month)
+    }
+}
+
+/// Rövid dátum a kiválasztott nyelven (pl. "okt. 12." / "Oct 12")
+func shortDate(_ d: Date, english: Bool) -> String {
+    d.formatted(Date.FormatStyle().day().month(.abbreviated)
+        .locale(Locale(identifier: english ? "en_US" : "hu_HU")))
 }

@@ -41,10 +41,37 @@ struct OverviewView: View {
     @EnvironmentObject private var store: ThemeStore
     @Query private var entries: [Entry]
     @State private var showTheme = false
+    @State private var showQuick = false
     @State private var sweep: CGFloat = 0
+    @State private var month: Date = OverviewView.monthStart(Date.now)
 
+    static func monthStart(_ d: Date) -> Date {
+        let cal = Calendar.current
+        return cal.date(from: cal.dateComponents([.year, .month], from: d)) ?? d
+    }
+
+    /// Az adott hónapba beleszámító tételek összege (ismétlődő + egyszeri).
     private func total(_ kind: EntryKind) -> Double {
-        entries.filter { $0.kind == kind }.reduce(0) { $0 + $1.amount }
+        entries.filter { $0.kind == kind && $0.counts(in: month) }.reduce(0) { $0 + $1.amount }
+    }
+
+    /// Csak az egyszeri tételek összege az adott hónapban.
+    private func oneTimeTotal(_ kind: EntryKind) -> Double {
+        entries.filter { $0.kind == kind && !$0.isRecurring && $0.counts(in: month) }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    private func shiftMonth(_ delta: Int) {
+        let next = Calendar.current.date(byAdding: .month, value: delta, to: month) ?? month
+        Haptics.tap(.soft)
+        withAnimation(.snappy) { month = next }
+        sweep = 0
+        withAnimation(.easeOut(duration: 0.8)) { sweep = 1 }
+    }
+
+    private func monthTitle(_ tr: Tr) -> String {
+        month.formatted(Date.FormatStyle().year().month(.wide)
+            .locale(Locale(identifier: tr.en ? "en_US" : "hu_HU")))
     }
 
     var body: some View {
@@ -55,7 +82,7 @@ struct OverviewView: View {
         let savings = total(.saving)
         let left = income - expenses - subs - savings
         let savingsRate = income > 0 ? savings / income : 0
-        let daysInMonth = Calendar.current.range(of: .day, in: .month, for: .now)?.count ?? 30
+        let daysInMonth = Calendar.current.range(of: .day, in: .month, for: month)?.count ?? 30
         let perDay = left / Double(daysInMonth)
 
         var segs: [DonutView.Seg] = [
@@ -73,6 +100,22 @@ struct OverviewView: View {
         return NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    // Hónap választó
+                    HStack {
+                        Button { shiftMonth(-1) } label: { Image(systemName: "chevron.left") }
+                            .accessibilityLabel(tr("Előző hónap", "Previous month"))
+                        Spacer()
+                        Text(monthTitle(tr))
+                            .font(.headline)
+                            .contentTransition(.numericText())
+                        Spacer()
+                        Button { shiftMonth(1) } label: { Image(systemName: "chevron.right") }
+                            .accessibilityLabel(tr("Következő hónap", "Next month"))
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .glassEffect(.regular, in: .capsule)
+
                     // Fő kártya
                     VStack(spacing: 6) {
                         Text(tr("Havonta megmarad", "Left each month"))
@@ -119,7 +162,7 @@ struct OverviewView: View {
                     // Kategóriák, bevételhez viszonyítva
                     VStack(spacing: 14) {
                         ForEach(EntryKind.allCases) { k in
-                            categoryRow(k, value: total(k), income: income, tr: tr)
+                            categoryRow(k, value: total(k), oneTime: oneTimeTotal(k), income: income, tr: tr)
                         }
                     }
                     .padding(18)
@@ -190,6 +233,12 @@ struct OverviewView: View {
             .background(AppBackground())
             .navigationTitle(tr("Áttekintés", "Overview"))
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(tr("Gyors hozzáadás", "Quick add"), systemImage: "plus.circle.fill") {
+                        Haptics.tap()
+                        showQuick = true
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button(tr("Téma", "Theme"), systemImage: "paintpalette.fill") {
                         Haptics.tap()
@@ -198,6 +247,7 @@ struct OverviewView: View {
                 }
             }
             .sheet(isPresented: $showTheme) { ThemeSettingsView() }
+            .sheet(isPresented: $showQuick) { QuickAddView() }
             .onAppear {
                 sweep = 0
                 withAnimation(.easeOut(duration: 1.0)) { sweep = 1 }
@@ -205,14 +255,29 @@ struct OverviewView: View {
         }
     }
 
-    private func categoryRow(_ k: EntryKind, value: Double, income: Double, tr: Tr) -> some View {
+    private func categoryRow(_ k: EntryKind, value: Double, oneTime: Double,
+                             income: Double, tr: Tr) -> some View {
         let share = income > 0 ? min(value / income, 1) : 0
+        let monthly = value - oneTime
         return VStack(spacing: 7) {
             HStack(spacing: 10) {
                 Image(systemName: k.icon).foregroundStyle(k.color).frame(width: 26)
                 Text(k.plural(tr)).lineLimit(1)
                 Spacer(minLength: 8)
                 Text(value.ft).fontWeight(.semibold).lineLimit(1).minimumScaleFactor(0.7)
+            }
+            if oneTime > 0 {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.triangle.2.circlepath").font(.caption2)
+                    Text(monthly.ft).lineLimit(1)
+                    Text("•")
+                    Image(systemName: "1.circle").font(.caption2)
+                    Text(oneTime.ft).lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 36)
             }
             if k != .income {
                 ProgressView(value: share).tint(k.color)

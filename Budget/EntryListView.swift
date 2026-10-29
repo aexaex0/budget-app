@@ -1,6 +1,11 @@
 import SwiftUI
 import SwiftData
 
+struct NewEntry: Identifiable {
+    let id = UUID()
+    let recurring: Bool
+}
+
 struct EntryListView: View {
     let kind: EntryKind
 
@@ -8,7 +13,7 @@ struct EntryListView: View {
     @Environment(\.modelContext) private var context
     @Query private var entries: [Entry]
     @State private var editing: Entry?
-    @State private var adding = false
+    @State private var newEntry: NewEntry?
 
     init(kind: EntryKind) {
         self.kind = kind
@@ -17,32 +22,51 @@ struct EntryListView: View {
                          sort: \.createdAt)
     }
 
-    private var total: Double { entries.reduce(0) { $0 + $1.amount } }
+    /// Bevételnél és kiadásnál lehet egyszeri összeg is.
+    private var supportsOneTime: Bool { kind == .income || kind == .expense }
+
+    private var recurring: [Entry] { entries.filter { $0.isRecurring } }
+    private var oneTime: [Entry] { entries.filter { !$0.isRecurring }.sorted { $0.date > $1.date } }
+    private var recurringTotal: Double { recurring.reduce(0) { $0 + $1.amount } }
+    private var oneTimeThisMonth: Double {
+        oneTime.filter { $0.counts(in: .now) }.reduce(0) { $0 + $1.amount }
+    }
+    private var total: Double { recurringTotal + oneTimeThisMonth }
 
     var body: some View {
         let tr = store.tr
         List {
-            ForEach(entries) { entry in
-                Button {
-                    Haptics.tap()
-                    editing = entry
-                } label: {
-                    row(entry, tr)
+            Section {
+                ForEach(recurring) { entry in entryButton(entry, tr) }
+                    .onDelete { delete(recurring, $0) }
+                if recurring.isEmpty {
+                    hint(tr("Még nincs havi tétel. Koppints a + gombra.",
+                            "No monthly items yet. Tap +."))
                 }
-                .buttonStyle(.plain)
-                .listRowBackground(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(.clear)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 20))
-                        .padding(.vertical, 3)
+            } header: {
+                sectionHeader(
+                    icon: "arrow.triangle.2.circlepath",
+                    title: tr("Havonta megújul", "Renews every month"),
+                    subtitle: tr("Minden hónapban automatikusan beleszámít.",
+                                 "Counted automatically every month.")
                 )
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 10, leading: 18, bottom: 10, trailing: 18))
             }
-            .onDelete { offsets in
-                Haptics.tap(.medium)
-                withAnimation(.snappy) {
-                    for i in offsets { context.delete(entries[i]) }
+
+            if supportsOneTime {
+                Section {
+                    ForEach(oneTime) { entry in entryButton(entry, tr) }
+                        .onDelete { delete(oneTime, $0) }
+                    if oneTime.isEmpty {
+                        hint(tr("Nincs egyszeri összeg. A + gombbal tudsz hozzáadni.",
+                                "No one-time amounts. Add one with +."))
+                    }
+                } header: {
+                    sectionHeader(
+                        icon: "1.circle",
+                        title: tr("Egyszeri összegek", "One-time amounts"),
+                        subtitle: tr("Csak abban a hónapban számítanak, amelyiknél megadtad.",
+                                     "Only counted in the month you set.")
+                    )
                 }
             }
         }
@@ -51,10 +75,44 @@ struct EntryListView: View {
         .background(AppBackground())
         .navigationTitle(kind.plural(tr))
         .animation(.snappy, value: entries.count)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            // Havi összesen kártya: rendes belső margóval, hogy a szöveg ne érjen a szélhez
+        .safeAreaInset(edge: .top, spacing: 0) { summaryCard(tr) }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                if supportsOneTime {
+                    Menu {
+                        Button {
+                            newEntry = NewEntry(recurring: true)
+                        } label: {
+                            Label(tr("Havi ismétlődő", "Monthly (repeats)"),
+                                  systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        Button {
+                            newEntry = NewEntry(recurring: false)
+                        } label: {
+                            Label(tr("Egyszeri összeg", "One-time amount"), systemImage: "1.circle")
+                        }
+                    } label: {
+                        Label(tr("Új", "New"), systemImage: "plus")
+                    }
+                } else {
+                    Button(tr("Új", "New"), systemImage: "plus") {
+                        Haptics.tap()
+                        newEntry = NewEntry(recurring: true)
+                    }
+                }
+            }
+        }
+        .sheet(item: $newEntry) { EntryEditor(kind: kind, entry: nil, recurring: $0.recurring) }
+        .sheet(item: $editing) { EntryEditor(kind: kind, entry: $0) }
+    }
+
+    // MARK: Részek
+
+    private func summaryCard(_ tr: Tr) -> some View {
+        VStack(spacing: 12) {
             HStack(spacing: 12) {
-                Text(tr("Havi összesen", "Monthly total"))
+                Text(supportsOneTime ? tr("Ebben a hónapban", "This month")
+                                     : tr("Havi összesen", "Monthly total"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -66,31 +124,85 @@ struct EntryListView: View {
                     .contentTransition(.numericText(value: total))
                     .animation(.snappy, value: total)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .glassEffect(.regular, in: .rect(cornerRadius: 24))
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
-            .padding(.bottom, 10)
-        }
-        .overlay {
-            if entries.isEmpty {
-                ContentUnavailableView(tr("Még nincs tétel", "Nothing here yet"),
-                                       systemImage: kind.icon,
-                                       description: Text(tr("Koppints a + gombra a hozzáadáshoz.",
-                                                            "Tap + to add one.")))
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(tr("Új", "New"), systemImage: "plus") {
-                    Haptics.tap()
-                    adding = true
+            if supportsOneTime {
+                HStack(spacing: 10) {
+                    chip(icon: "arrow.triangle.2.circlepath",
+                         title: tr("Havonta", "Monthly"), value: recurringTotal)
+                    chip(icon: "1.circle",
+                         title: tr("Egyszeri", "One-time"), value: oneTimeThisMonth)
                 }
             }
         }
-        .sheet(isPresented: $adding) { EntryEditor(kind: kind, entry: nil) }
-        .sheet(item: $editing) { EntryEditor(kind: kind, entry: $0) }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
+    }
+
+    private func chip(icon: String, title: String, value: Double) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.caption).foregroundStyle(kind.color)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title).font(.caption2).foregroundStyle(.secondary)
+                Text(value.ft)
+                    .font(.footnote.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 14))
+    }
+
+    private func sectionHeader(icon: String, title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Label(title, systemImage: icon)
+                .font(.subheadline.bold())
+                .foregroundStyle(.primary)
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .textCase(nil)
+        .padding(.top, 8)
+    }
+
+    private func hint(_ text: String) -> some View {
+        Text(text)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+    }
+
+    private func entryButton(_ entry: Entry, _ tr: Tr) -> some View {
+        Button {
+            Haptics.tap()
+            editing = entry
+        } label: {
+            row(entry, tr)
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.clear)
+                .glassEffect(.regular, in: .rect(cornerRadius: 20))
+                .padding(.vertical, 3)
+        )
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 10, leading: 18, bottom: 10, trailing: 18))
+    }
+
+    private func delete(_ list: [Entry], _ offsets: IndexSet) {
+        Haptics.tap(.medium)
+        withAnimation(.snappy) {
+            for i in offsets { context.delete(list[i]) }
+        }
     }
 
     private func row(_ entry: Entry, _ tr: Tr) -> some View {
@@ -99,8 +211,20 @@ struct EntryListView: View {
                 Image(systemName: kind.icon)
                     .foregroundStyle(kind.color)
                     .frame(width: 26)
-                Text(entry.name)
-                    .lineLimit(2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.name).lineLimit(2)
+                    if entry.isRecurring {
+                        Label(tr("Minden hónapban", "Every month"),
+                              systemImage: "arrow.triangle.2.circlepath")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        let day = shortDate(entry.date, english: store.isEnglish)
+                        Label(tr("Egyszeri • \(day)", "One-time • \(day)"), systemImage: "1.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Spacer(minLength: 8)
                 Text(entry.amount.ft)
                     .fontWeight(.semibold)
