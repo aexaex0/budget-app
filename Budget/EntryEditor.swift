@@ -5,6 +5,7 @@ struct EntryEditor: View {
     let kind: EntryKind
     let entry: Entry?
 
+    @EnvironmentObject private var store: ThemeStore
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
@@ -14,32 +15,35 @@ struct EntryEditor: View {
     @State private var saved: Double?
 
     var body: some View {
+        let tr = store.tr
         NavigationStack {
             Form {
                 Section {
-                    TextField("Név", text: $name)
-                    TextField("Havi összeg (Ft)", value: $amount, format: .number)
+                    TextField(tr("Név", "Name"), text: $name)
+                    TextField(tr("Havi összeg (Ft)", "Monthly amount (Ft)"), value: $amount, format: .number)
                         .keyboardType(.decimalPad)
                 }
                 if kind == .saving {
-                    Section("Cél (nem kötelező)") {
-                        TextField("Célösszeg (Ft)", value: $target, format: .number)
+                    Section(tr("Cél (nem kötelező)", "Goal (optional)")) {
+                        TextField(tr("Célösszeg (Ft)", "Target amount (Ft)"), value: $target, format: .number)
                             .keyboardType(.decimalPad)
-                        TextField("Eddig félretéve (Ft)", value: $saved, format: .number)
+                        TextField(tr("Eddig félretéve (Ft)", "Saved so far (Ft)"), value: $saved, format: .number)
                             .keyboardType(.decimalPad)
                     }
                 }
             }
             .scrollContentBackground(.hidden)
             .background(AppBackground())
-            .navigationTitle(entry == nil ? "Új \(kind.title.lowercased())" : "Szerkesztés")
+            .navigationTitle(entry == nil
+                             ? tr("Új \(kind.title(tr).lowercased())", "New \(kind.title(tr).lowercased())")
+                             : tr("Szerkesztés", "Edit"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Mégse") { dismiss() }
+                    Button(tr("Mégse", "Cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Mentés", action: save)
+                    Button(tr("Mentés", "Save"), action: save)
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || amount == nil)
                 }
             }
@@ -65,6 +69,7 @@ struct EntryEditor: View {
             context.insert(Entry(name: clean, amount: amount ?? 0, kind: kind,
                                  targetAmount: target ?? 0, savedSoFar: saved ?? 0))
         }
+        Haptics.success()
         dismiss()
     }
 }

@@ -6,21 +6,21 @@ enum EntryKind: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
+    func title(_ tr: Tr) -> String {
         switch self {
-        case .income: "Bevétel"
-        case .expense: "Kiadás"
-        case .subscription: "Előfizetés"
-        case .saving: "Megtakarítás"
+        case .income: tr("Bevétel", "Income")
+        case .expense: tr("Kiadás", "Expense")
+        case .subscription: tr("Előfizetés", "Subscription")
+        case .saving: tr("Megtakarítás", "Saving")
         }
     }
 
-    var plural: String {
+    func plural(_ tr: Tr) -> String {
         switch self {
-        case .income: "Bevételek"
-        case .expense: "Kiadások"
-        case .subscription: "Előfizetések"
-        case .saving: "Megtakarítások"
+        case .income: tr("Bevételek", "Income")
+        case .expense: tr("Kiadások", "Expenses")
+        case .subscription: tr("Előfizetések", "Subscriptions")
+        case .saving: tr("Megtakarítások", "Savings")
         }
     }
 
@@ -66,25 +66,5 @@ final class Entry {
         self.targetAmount = targetAmount
         self.savedSoFar = savedSoFar
         self.createdAt = .now
-    }
-}
-
-extension Double {
-    /// Forintként formázva, tizedes nélkül (pl. 250 000 Ft)
-    var ft: String {
-        formatted(.currency(code: "HUF")
-            .precision(.fractionLength(0))
-            .locale(Locale(identifier: "hu_HU")))
-    }
-}
-
-/// Háttér, amin a Liquid Glass elemek szépen látszanak.
-struct AppBackground: View {
-    var body: some View {
-        LinearGradient(
-            colors: [.indigo.opacity(0.45), .teal.opacity(0.30), .mint.opacity(0.25)],
-            startPoint: .topLeading, endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
     }
 }

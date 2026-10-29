@@ -2,6 +2,8 @@ name: Build IPA
 on:
   push:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: macos-26
@@ -24,3 +26,11 @@ jobs:
         with:
           name: Budget-ipa
           path: Budget.ipa
+      - name: Állandó letöltési link (Release)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest Budget.ipa --title "Pocket (legújabb)" \
+            --notes "Automatikus build: ${{ github.sha }}" --target ${{ github.sha }}
