@@ -1,0 +1,26 @@
+name: Build IPA
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode projekt generálása
+        run: brew install xcodegen && xcodegen generate
+      - name: Fordítás (aláírás nélkül)
+        run: |
+          xcodebuild -project Budget.xcodeproj -scheme Budget \
+            -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: IPA csomagolás
+        run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/Budget.app Payload/
+          zip -r Budget.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Budget-ipa
+          path: Budget.ipa
