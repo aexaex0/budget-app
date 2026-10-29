@@ -28,8 +28,8 @@ struct SlotGameView: View {
                 jackpotHeader
                 multiplierStrip
                 reels
-                winLabel
                 Spacer(minLength: 0)
+                latestWin
                 controls
             }
             .padding(.horizontal, 16)
@@ -151,7 +151,6 @@ struct SlotGameView: View {
 
     // MARK: 3x3-as rács (valódi görgetés)
 
-    private let cellSize: CGFloat = 92
     private let gap: CGFloat = 10
 
     private func isWinning(col: Int, row: Int) -> Bool {
@@ -160,54 +159,19 @@ struct SlotGameView: View {
         }
     }
 
-    private func winOverlay(_ col: Int) -> some View {
-        VStack(spacing: gap) {
-            ForEach(0..<3, id: \.self) { row in
-                let win = isWinning(col: col, row: row)
-                RoundedRectangle(cornerRadius: 18)
-                    .strokeBorder(win ? Color.yellow : Color.clear, lineWidth: 3)
-                    .frame(width: cellSize, height: cellSize)
-                    .shadow(color: win ? Color.yellow.opacity(0.8) : Color.clear, radius: 12)
-            }
-        }
-        .animation(.easeOut(duration: 0.25), value: engine.winLines)
-        .allowsHitTesting(false)
-    }
-
-    private func reelColumn(_ col: Int) -> some View {
-        let strip = engine.strips[col]
-        let travel = CGFloat(max(strip.count - 3, 0)) * (cellSize + gap)
-        let y = -(1 - CGFloat(engine.progress[col])) * travel
-        let spinning = engine.spinningCols[col]
-        return ZStack(alignment: .top) {
-            VStack(spacing: gap) {
-                ForEach(0..<3, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(Color.white.opacity(0.10))
-                        .frame(width: cellSize, height: cellSize)
-                }
-            }
-            VStack(spacing: gap) {
-                ForEach(strip.indices, id: \.self) { i in
-                    Text(strip[i].glyph)
-                        .font(.system(size: 46))
-                        .frame(width: cellSize, height: cellSize)
-                }
-            }
-            .offset(y: y)
-            .blur(radius: spinning ? 1.2 : 0)
-        }
-        .frame(width: cellSize, height: cellSize * 3 + gap * 2, alignment: .top)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .overlay { winOverlay(col) }
-        .offset(y: engine.bounce[col] ? 8 : 0)
-        .animation(.spring(duration: 0.2, bounce: 0.5), value: engine.bounce[col])
+    private func winCells(_ col: Int) -> [Bool] {
+        (0..<3).map { row in isWinning(col: col, row: row) }
     }
 
     private var reels: some View {
         HStack(spacing: gap) {
             ForEach(0..<3, id: \.self) { col in
-                reelColumn(col)
+                ReelColumn(strip: engine.strips[col],
+                           progress: engine.progress[col],
+                           spinning: engine.spinningCols[col],
+                           bounce: engine.bounce[col],
+                           wins: winCells(col))
+                    .equatable()
             }
         }
         .padding(12)
@@ -229,13 +193,19 @@ struct SlotGameView: View {
         }
     }
 
-    private var winLabel: some View {
-        Text(engine.shownWin > 0 ? "+\(engine.shownWin.ft)" : " ")
-            .font(.system(size: 28, weight: .heavy, design: .rounded))
-            .foregroundStyle(Color.yellow)
-            .lineLimit(1)
-            .minimumScaleFactor(0.5)
-            .frame(height: 40)
+    private var latestWin: some View {
+        VStack(spacing: 2) {
+            Text("LATEST WIN")
+                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                .foregroundStyle(.secondary)
+            Text(engine.shownWin.ft)
+                .font(.system(size: 28, weight: .heavy, design: .rounded))
+                .foregroundStyle(engine.shownWin > 0 ? Color.yellow : Color.white.opacity(0.5))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .contentTransition(.numericText(value: engine.shownWin))
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: Vezérlők: bet | pörgetés | autospin + fast
@@ -307,5 +277,54 @@ struct SlotGameView: View {
                                 : .regular.interactive(), in: .circle)
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Külön nézet, hogy a multiplier/ticker frissítések ne építsék újra a görgetést.
+struct ReelColumn: View, Equatable {
+    let strip: [SlotSymbol]
+    let progress: Double
+    let spinning: Bool
+    let bounce: Bool
+    let wins: [Bool]
+
+    private let cellSize: CGFloat = 92
+    private let gap: CGFloat = 10
+
+    var body: some View {
+        let travel = CGFloat(max(strip.count - 3, 0)) * (cellSize + gap)
+        let y = -(1 - CGFloat(progress)) * travel
+        ZStack(alignment: .top) {
+            VStack(spacing: gap) {
+                ForEach(0..<3, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(Color.white.opacity(0.10))
+                        .frame(width: cellSize, height: cellSize)
+                }
+            }
+            VStack(spacing: gap) {
+                ForEach(strip.indices, id: \.self) { i in
+                    Text(strip[i].glyph)
+                        .font(.system(size: 46))
+                        .frame(width: cellSize, height: cellSize)
+                }
+            }
+            .drawingGroup()
+            .offset(y: y)
+        }
+        .frame(width: cellSize, height: cellSize * 3 + gap * 2, alignment: .top)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay {
+            VStack(spacing: gap) {
+                ForEach(0..<3, id: \.self) { row in
+                    RoundedRectangle(cornerRadius: 18)
+                        .strokeBorder(wins[row] ? Color.yellow : Color.clear, lineWidth: 3)
+                        .frame(width: cellSize, height: cellSize)
+                }
+            }
+            .allowsHitTesting(false)
+        }
+        .offset(y: bounce ? 8 : 0)
+        .animation(.spring(duration: 0.2, bounce: 0.5), value: bounce)
     }
 }

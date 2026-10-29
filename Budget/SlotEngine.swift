@@ -84,7 +84,6 @@ final class SlotEngine: ObservableObject {
         busy = true
         balance -= b
         winLines = []
-        shownWin = 0
         withAnimation(.easeOut(duration: 0.15)) { winBanner = nil }
         celebration = nil
         jackpotMode = false
@@ -102,7 +101,7 @@ final class SlotEngine: ObservableObject {
         let stops: [Double] = [0.9, 1.4, 1.9].map { $0 * speed }
         withTransaction(Transaction(animation: nil)) {
             for c in 0..<3 {
-                let rows = max(8, Int(stops[c] * 11))
+                let rows = max(6, Int(stops[c] * 8))
                 let filler = (0..<rows).map { _ in SlotSymbol.random() }
                 let old = Array(strips[c].prefix(3))
                 strips[c] = outcome.grid[c] + filler + old
