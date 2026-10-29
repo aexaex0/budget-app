@@ -146,7 +146,7 @@ struct SlotGameView: View {
         }
         .animation(.easeOut(duration: 0.08), value: engine.multIndex)
         .padding(8)
-        .glassEffect(.regular, in: .rect(cornerRadius: 22))
+        .background(Color.white.opacity(0.08), in: .rect(cornerRadius: 22))
     }
 
     // MARK: 3x3-as rács (valódi görgetés)
@@ -167,7 +167,8 @@ struct SlotGameView: View {
         HStack(spacing: gap) {
             ForEach(0..<3, id: \.self) { col in
                 ReelColumn(strip: engine.strips[col],
-                           progress: engine.progress[col],
+                           start: engine.reelStart[col],
+                           duration: engine.reelDur[col],
                            spinning: engine.spinningCols[col],
                            bounce: engine.bounce[col],
                            wins: winCells(col))
@@ -175,7 +176,7 @@ struct SlotGameView: View {
             }
         }
         .padding(12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 28))
+        .background(Color.white.opacity(0.08), in: .rect(cornerRadius: 28))
         .overlay {
             if let b = engine.winBanner {
                 Text(b)
@@ -280,10 +281,12 @@ struct SlotGameView: View {
     }
 }
 
-/// Külön nézet, hogy a multiplier/ticker frissítések ne építsék újra a görgetést.
+/// A tekercs Canvas-on rajzolódik, az állapotot az idő adja, nem a SwiftUI nézetfa.
+/// Így pörgetés közben nincs nézetfrissítés, csak egy sima rajzolás képkockánként.
 struct ReelColumn: View, Equatable {
     let strip: [SlotSymbol]
-    let progress: Double
+    let start: Date
+    let duration: Double
     let spinning: Bool
     let bounce: Bool
     let wins: [Bool]
@@ -291,39 +294,51 @@ struct ReelColumn: View, Equatable {
     private let cellSize: CGFloat = 92
     private let gap: CGFloat = 10
 
+    private func progress(at date: Date) -> Double {
+        let x = date.timeIntervalSince(start) / max(duration, 0.01)
+        if x <= 0 { return 0 }
+        if x >= 1 { return 1 }
+        return 1 - pow(1 - x, 2.4)
+    }
+
     var body: some View {
-        let travel = CGFloat(max(strip.count - 3, 0)) * (cellSize + gap)
-        let y = -(1 - CGFloat(progress)) * travel
-        ZStack(alignment: .top) {
-            VStack(spacing: gap) {
-                ForEach(0..<3, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(Color.white.opacity(0.10))
-                        .frame(width: cellSize, height: cellSize)
+        let step = cellSize + gap
+        let height = cellSize * 3 + gap * 2
+        TimelineView(.animation(minimumInterval: nil, paused: !spinning)) { ctx in
+            Canvas { context, size in
+                let p = progress(at: ctx.date)
+                let travel = Double(max(strip.count - 3, 0)) * Double(step)
+                let off = -(1 - p) * travel
+                // háttér cellák
+                for r in 0..<3 {
+                    let rect = CGRect(x: 0, y: CGFloat(r) * step, width: cellSize, height: cellSize)
+                    context.fill(Path(roundedRect: rect, cornerRadius: 18),
+                                 with: .color(Color.white.opacity(0.10)))
+                }
+                // tekercs
+                var clipped = context
+                clipped.clip(to: Path(CGRect(origin: .zero, size: size)))
+                for i in strip.indices {
+                    let y = Double(i) * Double(step) + off
+                    if y < -Double(step) || y > Double(height) { continue }
+                    if let sym = context.resolveSymbol(id: strip[i].rawValue) {
+                        clipped.draw(sym, at: CGPoint(x: cellSize / 2, y: y + Double(cellSize) / 2))
+                    }
+                }
+                // nyerő keretek
+                for r in 0..<3 where wins[r] {
+                    let rect = CGRect(x: 1.5, y: CGFloat(r) * step + 1.5,
+                                      width: cellSize - 3, height: cellSize - 3)
+                    context.stroke(Path(roundedRect: rect, cornerRadius: 17),
+                                   with: .color(.yellow), lineWidth: 3)
+                }
+            } symbols: {
+                ForEach(SlotSymbol.allCases, id: \.rawValue) { s in
+                    Text(s.glyph).font(.system(size: 46)).tag(s.rawValue)
                 }
             }
-            VStack(spacing: gap) {
-                ForEach(strip.indices, id: \.self) { i in
-                    Text(strip[i].glyph)
-                        .font(.system(size: 46))
-                        .frame(width: cellSize, height: cellSize)
-                }
-            }
-            .drawingGroup()
-            .offset(y: y)
         }
-        .frame(width: cellSize, height: cellSize * 3 + gap * 2, alignment: .top)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .overlay {
-            VStack(spacing: gap) {
-                ForEach(0..<3, id: \.self) { row in
-                    RoundedRectangle(cornerRadius: 18)
-                        .strokeBorder(wins[row] ? Color.yellow : Color.clear, lineWidth: 3)
-                        .frame(width: cellSize, height: cellSize)
-                }
-            }
-            .allowsHitTesting(false)
-        }
+        .frame(width: cellSize, height: height)
         .offset(y: bounce ? 8 : 0)
         .animation(.spring(duration: 0.2, bounce: 0.5), value: bounce)
     }

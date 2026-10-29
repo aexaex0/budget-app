@@ -22,7 +22,8 @@ final class SlotEngine: ObservableObject {
     @Published var bet: Int = 60
     @Published var grid: [[SlotSymbol]] = (0..<3).map { _ in (0..<3).map { _ in SlotSymbol.random() } }
     @Published var strips: [[SlotSymbol]] = (0..<3).map { _ in (0..<3).map { _ in SlotSymbol.random() } }
-    @Published var progress: [Double] = [1, 1, 1]
+    @Published var reelStart: [Date] = [.distantPast, .distantPast, .distantPast]
+    @Published var reelDur: [Double] = [1, 1, 1]
     @Published var sound = true {
         didSet { SlotSound.shared.enabled = sound }
     }
@@ -99,20 +100,14 @@ final class SlotEngine: ObservableObject {
 
         // valódi görgetés: minden oszlop egy hosszú tekercs, ami legördül a végeredményig
         let stops: [Double] = [0.9, 1.4, 1.9].map { $0 * speed }
-        withTransaction(Transaction(animation: nil)) {
-            for c in 0..<3 {
-                let rows = max(6, Int(stops[c] * 8))
-                let filler = (0..<rows).map { _ in SlotSymbol.random() }
-                let old = Array(strips[c].prefix(3))
-                strips[c] = outcome.grid[c] + filler + old
-                progress[c] = 0
-            }
-        }
-        try? await Task.sleep(for: .milliseconds(40))
+        let now = Date()
         for c in 0..<3 {
-            withAnimation(.timingCurve(0.12, 0.35, 0.2, 1.0, duration: stops[c])) {
-                progress[c] = 1
-            }
+            let rows = max(6, Int(stops[c] * 8))
+            let filler = (0..<rows).map { _ in SlotSymbol.random() }
+            let old = Array(strips[c].prefix(3))
+            strips[c] = outcome.grid[c] + filler + old
+            reelDur[c] = stops[c]
+            reelStart[c] = now
         }
         // az oszlopok balról jobbra állnak meg
         var elapsed = 0.0
@@ -152,7 +147,7 @@ final class SlotEngine: ObservableObject {
             let n = jackpotMode ? 4 : 5
             if multSpinning { multIndex = (multIndex + 1) % n }
             SlotSound.shared.play(.tick)
-            try? await Task.sleep(for: .seconds(fast ? 0.045 : 0.07))
+            try? await Task.sleep(for: .seconds(fast ? 0.06 : 0.09))
         }
     }
 

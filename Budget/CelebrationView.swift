@@ -70,6 +70,7 @@ enum ParticleFactory {
 }
 
 struct CelebrationView: View {
+    static let coins: [String] = ["💰", "💵", "🪙", "💸"]
     let celebration: Celebration
     @State private var particles: [Particle]
 
@@ -105,7 +106,13 @@ struct CelebrationView: View {
                         x = p.x * size.width + sin(lt * p.swayFreq) * p.swayAmp
                     }
                     if let e = p.emoji {
-                        context.draw(Text(e).font(.system(size: p.size)), at: CGPoint(x: x, y: y))
+                        if let idx = CelebrationView.coins.firstIndex(of: e),
+                           let sym = context.resolveSymbol(id: idx) {
+                            var g = context
+                            g.translateBy(x: x, y: y)
+                            g.scaleBy(x: p.size / 28, y: p.size / 28)
+                            g.draw(sym, at: .zero)
+                        }
                     } else {
                         var g = context
                         g.translateBy(x: x, y: y)
@@ -114,6 +121,10 @@ struct CelebrationView: View {
                                           width: p.size, height: p.size * 0.6)
                         g.fill(Path(rect), with: .color(p.color))
                     }
+                }
+            } symbols: {
+                ForEach(CelebrationView.coins.indices, id: \.self) { i in
+                    Text(CelebrationView.coins[i]).font(.system(size: 28)).tag(i)
                 }
             }
         }
