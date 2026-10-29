@@ -7,11 +7,13 @@ struct BudgetApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(store)
-                .preferredColorScheme(store.scheme)
-                .tint(store.theme.accent.color)
+            LockGate {
+                ContentView()
+            }
+            .environmentObject(store)
+            .preferredColorScheme(store.scheme)
+            .tint(store.theme.accent.color)
         }
-        .modelContainer(for: Entry.self) // helyi tárolás az eszközön
+        .modelContainer(for: [Entry.self, Category.self]) // helyi tárolás az eszközön
     }
 }

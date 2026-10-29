@@ -54,6 +54,8 @@ final class Entry {
     var createdAt: Date
     var isRecurring: Bool = true   // true: minden hónapban számít; false: csak a `date` hónapjában
     var date: Date = Date.now      // egyszeri tételnél az időpont
+    var categoryID: String = ""    // kiadás kategóriája (Category.id), üres = nincs
+    var renewalDay: Int = 1        // előfizetés megújulásának napja (1-28)
 
     var kind: EntryKind {
         get { EntryKind(rawValue: kindRaw) ?? .expense }
@@ -62,7 +64,8 @@ final class Entry {
 
     init(name: String, amount: Double, kind: EntryKind,
          targetAmount: Double = 0, savedSoFar: Double = 0,
-         isRecurring: Bool = true, date: Date = .now) {
+         isRecurring: Bool = true, date: Date = .now,
+         categoryID: String = "", renewalDay: Int = 1) {
         self.name = name
         self.amount = amount
         self.kindRaw = kind.rawValue
@@ -71,6 +74,8 @@ final class Entry {
         self.createdAt = .now
         self.isRecurring = isRecurring
         self.date = date
+        self.categoryID = categoryID
+        self.renewalDay = renewalDay
     }
 
     /// Beleszámít-e az adott hónapba? Ismétlődő: mindig. Egyszeri: csak a saját hónapjában.

@@ -15,12 +15,17 @@ struct EntryEditor: View {
     @State private var saved: Double?
     @State private var recurring: Bool
     @State private var date: Date
+    @State private var categoryID: String
+    @State private var renewalDay: Int
+    @Query(sort: \Category.createdAt) private var categories: [Category]
 
     init(kind: EntryKind, entry: Entry?, recurring: Bool = true) {
         self.kind = kind
         self.entry = entry
         _recurring = State(initialValue: entry?.isRecurring ?? recurring)
         _date = State(initialValue: entry?.date ?? Date.now)
+        _categoryID = State(initialValue: entry?.categoryID ?? "")
+        _renewalDay = State(initialValue: entry?.renewalDay ?? 1)
     }
 
     private var supportsOneTime: Bool { kind == .income || kind == .expense }
@@ -51,6 +56,20 @@ struct EntryEditor: View {
                     TextField(tr("Név", "Name"), text: $name)
                     TextField(amountLabel(tr), value: $amount, format: .number)
                         .keyboardType(.decimalPad)
+                    if kind == .expense {
+                        Picker(tr("Kategória", "Category"), selection: $categoryID) {
+                            Text(tr("Nincs", "None")).tag("")
+                            ForEach(categories) { c in
+                                Label(c.name, systemImage: c.symbol).tag(c.id)
+                            }
+                        }
+                    }
+                    if kind == .subscription {
+                        Stepper(value: $renewalDay, in: 1...28) {
+                            Text(tr("Megújul: minden hónap \(renewalDay). napján",
+                                    "Renews on day \(renewalDay) of each month"))
+                        }
+                    }
                 }
                 if kind == .saving {
                     Section(tr("Cél (nem kötelező)", "Goal (optional)")) {
@@ -104,10 +123,14 @@ struct EntryEditor: View {
             entry.savedSoFar = saved ?? 0
             entry.isRecurring = isRecurring
             entry.date = date
+            entry.categoryID = kind == .expense ? categoryID : ""
+            entry.renewalDay = renewalDay
         } else {
             context.insert(Entry(name: clean, amount: amount ?? 0, kind: kind,
                                  targetAmount: target ?? 0, savedSoFar: saved ?? 0,
-                                 isRecurring: isRecurring, date: date))
+                                 isRecurring: isRecurring, date: date,
+                                 categoryID: kind == .expense ? categoryID : "",
+                                 renewalDay: renewalDay))
         }
         Haptics.success()
         dismiss()

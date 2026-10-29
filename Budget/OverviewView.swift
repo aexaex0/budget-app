@@ -37,11 +37,30 @@ struct DonutView: View {
     }
 }
 
+struct FlowLegend: View {
+    let items: [(String, Color)]
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                HStack(spacing: 5) {
+                    Circle().fill(item.1).frame(width: 9, height: 9)
+                    Text(item.0).font(.caption).lineLimit(1)
+                }
+            }
+        }
+        .minimumScaleFactor(0.8)
+    }
+}
+
 struct OverviewView: View {
     @EnvironmentObject private var store: ThemeStore
     @Query private var entries: [Entry]
-    @State private var showTheme = false
+    @Query(sort: \Category.createdAt) private var categories: [Category]
+    @State private var showSettings = false
     @State private var showQuick = false
+    @State private var showDeposit = false
+    @State private var showCalc = false
     @State private var sweep: CGFloat = 0
     @State private var month: Date = OverviewView.monthStart(Date.now)
 
@@ -50,15 +69,50 @@ struct OverviewView: View {
         return cal.date(from: cal.dateComponents([.year, .month], from: d)) ?? d
     }
 
-    /// Az adott hónapba beleszámító tételek összege (ismétlődő + egyszeri).
-    private func total(_ kind: EntryKind) -> Double {
-        entries.filter { $0.kind == kind && $0.counts(in: month) }.reduce(0) { $0 + $1.amount }
+    // MARK: Számítások
+
+    private func sum(_ kind: EntryKind, in m: Date) -> Double {
+        entries.filter { $0.kind == kind && $0.counts(in: m) }.reduce(0) { $0 + $1.amount }
     }
 
-    /// Csak az egyszeri tételek összege az adott hónapban.
     private func oneTimeTotal(_ kind: EntryKind) -> Double {
         entries.filter { $0.kind == kind && !$0.isRecurring && $0.counts(in: month) }
             .reduce(0) { $0 + $1.amount }
+    }
+
+    private func categoryRows(_ tr: Tr) -> [CatRow] {
+        let exp = entries.filter { $0.kind == .expense && $0.counts(in: month) }
+        var rows: [CatRow] = []
+        for c in categories {
+            let spent = exp.filter { $0.categoryID == c.id }.reduce(0) { $0 + $1.amount }
+            rows.append(CatRow(id: c.id, name: c.name, symbol: c.symbol, color: c.color,
+                               spent: spent, limit: c.monthlyLimit))
+        }
+        let known = Set(categories.map { $0.id })
+        let other = exp.filter { !known.contains($0.categoryID) }.reduce(0) { $0 + $1.amount }
+        if other > 0 {
+            rows.append(CatRow(id: "other", name: tr("Egyéb / nincs kategória", "Other / none"),
+                               symbol: "questionmark.circle.fill", color: .gray,
+                               spent: other, limit: 0))
+        }
+        let visible = rows.filter { $0.spent > 0 || $0.limit > 0 }
+        return visible.sorted { $0.spent > $1.spent }
+    }
+
+    private func historyPoints(_ tr: Tr) -> [HistPoint] {
+        var pts: [HistPoint] = []
+        let loc = Locale(identifier: tr.en ? "en_US" : "hu_HU")
+        for back in stride(from: 5, through: 0, by: -1) {
+            let m = Calendar.current.date(byAdding: .month, value: -back, to: month) ?? month
+            let label = m.formatted(Date.FormatStyle().month(.abbreviated).locale(loc))
+            let inc = sum(.income, in: m)
+            let spent = sum(.expense, in: m) + sum(.subscription, in: m)
+            let saved = sum(.saving, in: m)
+            pts.append(HistPoint(label: label, series: tr("Bevétel", "Income"), value: inc))
+            pts.append(HistPoint(label: label, series: tr("Kiadás", "Spent"), value: spent))
+            pts.append(HistPoint(label: label, series: tr("Félretett", "Saved"), value: saved))
+        }
+        return pts
     }
 
     private func shiftMonth(_ delta: Int) {
@@ -74,16 +128,28 @@ struct OverviewView: View {
             .locale(Locale(identifier: tr.en ? "en_US" : "hu_HU")))
     }
 
+    // MARK: Nézet
+
     var body: some View {
         let tr = store.tr
-        let income = total(.income)
-        let expenses = total(.expense)
-        let subs = total(.subscription)
-        let savings = total(.saving)
+        let income = sum(.income, in: month)
+        let expenses = sum(.expense, in: month)
+        let subs = sum(.subscription, in: month)
+        let savings = sum(.saving, in: month)
         let left = income - expenses - subs - savings
         let savingsRate = income > 0 ? savings / income : 0
         let daysInMonth = Calendar.current.range(of: .day, in: .month, for: month)?.count ?? 30
         let perDay = left / Double(daysInMonth)
+
+        let oneTimeSpent = oneTimeTotal(.expense)
+        let allowance = left + oneTimeSpent
+
+        let savingEntries = entries.filter { $0.kind == .saving }
+        let piggy = savingEntries.reduce(0) { $0 + $1.savedSoFar }
+        let goalsTarget = savingEntries.reduce(0) { $0 + $1.targetAmount }
+
+        let catRows = categoryRows(tr)
+        let overLimit = catRows.filter { $0.limit > 0 && $0.spent > $0.limit }
 
         var segs: [DonutView.Seg] = [
             .init(id: tr("Kiadások", "Expenses"), value: expenses, color: EntryKind.expense.color),
@@ -93,28 +159,15 @@ struct OverviewView: View {
         if left > 0 { segs.append(.init(id: tr("Marad", "Left"), value: left, color: .green)) }
         segs = segs.filter { $0.value > 0 }
 
-        let spendable = entries.filter { $0.kind == .expense || $0.kind == .subscription }
+        let spendable = entries.filter { ($0.kind == .expense || $0.kind == .subscription) && $0.counts(in: month) }
         let biggest = spendable.max(by: { $0.amount < $1.amount })
-        let goals = entries.filter { $0.kind == .saving && $0.targetAmount > 0 }
+        let goals = savingEntries.filter { $0.targetAmount > 0 }
+        let hasData = !entries.isEmpty
 
         return NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Hónap választó
-                    HStack {
-                        Button { shiftMonth(-1) } label: { Image(systemName: "chevron.left") }
-                            .accessibilityLabel(tr("Előző hónap", "Previous month"))
-                        Spacer()
-                        Text(monthTitle(tr))
-                            .font(.headline)
-                            .contentTransition(.numericText())
-                        Spacer()
-                        Button { shiftMonth(1) } label: { Image(systemName: "chevron.right") }
-                            .accessibilityLabel(tr("Következő hónap", "Next month"))
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .glassEffect(.regular, in: .capsule)
+                    monthPicker(tr)
 
                     // Fő kártya
                     VStack(spacing: 6) {
@@ -144,6 +197,21 @@ struct OverviewView: View {
                     .padding(24)
                     .glassCard(28)
 
+                    if !overLimit.isEmpty {
+                        let names = overLimit.map { $0.name }.joined(separator: ", ")
+                        Label(tr("Túlléptél egy limitet: \(names)", "Over limit: \(names)"),
+                              systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.red)
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .glassCard(20)
+                    }
+
+                    SpendingMoneyCard(allowance: allowance, spent: oneTimeSpent)
+
+                    PiggyBankCard(saved: piggy, target: goalsTarget) { showDeposit = true }
+
                     // Fánk diagram
                     if !segs.isEmpty {
                         VStack(spacing: 14) {
@@ -159,10 +227,17 @@ struct OverviewView: View {
                         .glassCard(28)
                     }
 
-                    // Kategóriák, bevételhez viszonyítva
+                    CategoryBreakdownCard(rows: catRows)
+
+                    if hasData {
+                        HistoryChartCard(points: historyPoints(tr))
+                    }
+
+                    // Típusok, bevételhez viszonyítva
                     VStack(spacing: 14) {
                         ForEach(EntryKind.allCases) { k in
-                            categoryRow(k, value: total(k), oneTime: oneTimeTotal(k), income: income, tr: tr)
+                            kindRow(k, value: sum(k, in: month), oneTime: oneTimeTotal(k),
+                                    income: income, tr: tr)
                         }
                     }
                     .padding(18)
@@ -179,13 +254,6 @@ struct OverviewView: View {
                             HStack(spacing: 12) {
                                 statCard(tr("Éves előfizetés", "Subscriptions / year"), (subs * 12).ft)
                                 statCard(tr("Éves megmarad", "Left per year"), (left * 12).ft)
-                            }
-                            HStack(spacing: 12) {
-                                statCard(tr("Napi keret", "Per day"), perDay.ft)
-                                statCard(tr("Kiadás a bevételből", "Spent of income"),
-                                         income > 0
-                                         ? ((expenses + subs) / income).formatted(.percent.precision(.fractionLength(0)))
-                                         : "–")
                             }
                         }
                     }
@@ -227,6 +295,22 @@ struct OverviewView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .glassCard(24)
                     }
+
+                    // Célkalkulátor
+                    Button {
+                        Haptics.tap()
+                        showCalc = true
+                    } label: {
+                        HStack {
+                            Label(tr("Célkalkulátor", "Goal calculator"), systemImage: "function")
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.secondary)
+                        }
+                        .padding(18)
+                        .frame(maxWidth: .infinity)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding()
             }
@@ -240,14 +324,16 @@ struct OverviewView: View {
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button(tr("Téma", "Theme"), systemImage: "paintpalette.fill") {
+                    Button(tr("Beállítások", "Settings"), systemImage: "gearshape.fill") {
                         Haptics.tap()
-                        showTheme = true
+                        showSettings = true
                     }
                 }
             }
-            .sheet(isPresented: $showTheme) { ThemeSettingsView() }
+            .sheet(isPresented: $showSettings) { ThemeSettingsView() }
             .sheet(isPresented: $showQuick) { QuickAddView() }
+            .sheet(isPresented: $showDeposit) { DepositView() }
+            .sheet(isPresented: $showCalc) { GoalCalculatorView() }
             .onAppear {
                 sweep = 0
                 withAnimation(.easeOut(duration: 1.0)) { sweep = 1 }
@@ -255,8 +341,25 @@ struct OverviewView: View {
         }
     }
 
-    private func categoryRow(_ k: EntryKind, value: Double, oneTime: Double,
-                             income: Double, tr: Tr) -> some View {
+    // MARK: Részek
+
+    private func monthPicker(_ tr: Tr) -> some View {
+        HStack {
+            Button { shiftMonth(-1) } label: { Image(systemName: "chevron.left") }
+                .accessibilityLabel(tr("Előző hónap", "Previous month"))
+            Spacer()
+            Text(monthTitle(tr)).font(.headline)
+            Spacer()
+            Button { shiftMonth(1) } label: { Image(systemName: "chevron.right") }
+                .accessibilityLabel(tr("Következő hónap", "Next month"))
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .glassEffect(.regular, in: .capsule)
+    }
+
+    private func kindRow(_ k: EntryKind, value: Double, oneTime: Double,
+                         income: Double, tr: Tr) -> some View {
         let share = income > 0 ? min(value / income, 1) : 0
         let monthly = value - oneTime
         return VStack(spacing: 7) {
@@ -301,21 +404,5 @@ struct OverviewView: View {
         .padding(.vertical, 16)
         .padding(.horizontal, 8)
         .glassEffect(.regular, in: .rect(cornerRadius: 20))
-    }
-}
-
-struct FlowLegend: View {
-    let items: [(String, Color)]
-
-    var body: some View {
-        HStack(spacing: 14) {
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                HStack(spacing: 5) {
-                    Circle().fill(item.1).frame(width: 9, height: 9)
-                    Text(item.0).font(.caption).lineLimit(1)
-                }
-            }
-        }
-        .minimumScaleFactor(0.8)
     }
 }

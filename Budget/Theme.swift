@@ -142,6 +142,18 @@ final class ThemeStore: ObservableObject {
     @Published var haptics: Bool {
         didSet { UserDefaults.standard.set(haptics, forKey: "haptics") }
     }
+    @Published var lockEnabled: Bool {
+        didSet { UserDefaults.standard.set(lockEnabled, forKey: "lock") }
+    }
+    @Published var subReminders: Bool {
+        didSet { UserDefaults.standard.set(subReminders, forKey: "subReminders") }
+    }
+    @Published var reminderDays: Int {
+        didSet { UserDefaults.standard.set(reminderDays, forKey: "reminderDays") }
+    }
+    @Published var monthlyReport: Bool {
+        didSet { UserDefaults.standard.set(monthlyReport, forKey: "monthlyReport") }
+    }
 
     init() {
         let d = UserDefaults.standard
@@ -154,6 +166,10 @@ final class ThemeStore: ObservableObject {
         appearance = AppearanceMode(rawValue: d.string(forKey: "appearance") ?? "") ?? .system
         language = AppLanguage(rawValue: d.string(forKey: "language") ?? "") ?? .system
         haptics = d.object(forKey: "haptics") as? Bool ?? true
+        lockEnabled = d.bool(forKey: "lock")
+        subReminders = d.bool(forKey: "subReminders")
+        reminderDays = d.object(forKey: "reminderDays") as? Int ?? 2
+        monthlyReport = d.bool(forKey: "monthlyReport")
         Fmt.en = isEnglish
     }
 

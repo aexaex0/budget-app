@@ -31,6 +31,42 @@ struct ThemeSettingsView: View {
                         .pickerStyle(.segmented)
                     }
 
+                    NavigationLink {
+                        CategoriesView()
+                    } label: {
+                        HStack {
+                            Label(tr("Kategóriák és limitek", "Categories & limits"), systemImage: "tag.fill")
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.secondary)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                    }
+                    .buttonStyle(.plain)
+
+                    section(tr("Biztonság", "Security")) {
+                        Toggle(tr("Zárolás Face ID-val", "Lock with Face ID"), isOn: $store.lockEnabled)
+                        Text(tr("Az app megnyitáskor és háttérből visszatérve kéri a Face ID-t (vagy a készülékkódot).",
+                                "Asks for Face ID (or your passcode) on open and when returning from the background."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    section(tr("Értesítések", "Notifications")) {
+                        Toggle(tr("Előfizetés emlékeztető", "Subscription reminders"), isOn: $store.subReminders)
+                        if store.subReminders {
+                            Stepper(value: $store.reminderDays, in: 0...7) {
+                                Text(tr("\(store.reminderDays) nappal előtte", "\(store.reminderDays) days before"))
+                            }
+                        }
+                        Toggle(tr("Havi összegzés kész", "Monthly report ready"), isOn: $store.monthlyReport)
+                        Text(tr("Minden hónap 1-jén 9:00-kor jön az értesítés.",
+                                "The notification arrives on the 1st of each month at 9:00."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     section(tr("Kész témák", "Preset themes")) {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
@@ -89,7 +125,7 @@ struct ThemeSettingsView: View {
                 .padding()
             }
             .background(AppBackground())
-            .navigationTitle(tr("Téma", "Theme"))
+            .navigationTitle(tr("Beállítások", "Settings"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

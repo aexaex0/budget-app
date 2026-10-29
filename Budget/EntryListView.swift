@@ -14,6 +14,8 @@ struct EntryListView: View {
     @Query private var entries: [Entry]
     @State private var editing: Entry?
     @State private var newEntry: NewEntry?
+    @State private var showCalc = false
+    @Query(sort: \Category.createdAt) private var categories: [Category]
 
     init(kind: EntryKind) {
         self.kind = kind
@@ -77,6 +79,20 @@ struct EntryListView: View {
         .animation(.snappy, value: entries.count)
         .safeAreaInset(edge: .top, spacing: 0) { summaryCard(tr) }
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                if kind == .expense {
+                    NavigationLink {
+                        CategoriesView()
+                    } label: {
+                        Label(tr("Kategóriák", "Categories"), systemImage: "tag.fill")
+                    }
+                } else if kind == .saving {
+                    Button(tr("Célkalkulátor", "Goal calculator"), systemImage: "function") {
+                        Haptics.tap()
+                        showCalc = true
+                    }
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 if supportsOneTime {
                     Menu {
@@ -104,6 +120,7 @@ struct EntryListView: View {
         }
         .sheet(item: $newEntry) { EntryEditor(kind: kind, entry: nil, recurring: $0.recurring) }
         .sheet(item: $editing) { EntryEditor(kind: kind, entry: $0) }
+        .sheet(isPresented: $showCalc) { GoalCalculatorView() }
     }
 
     // MARK: Részek
@@ -213,7 +230,12 @@ struct EntryListView: View {
                     .frame(width: 26)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.name).lineLimit(2)
-                    if entry.isRecurring {
+                    if kind == .subscription {
+                        Label(tr("Megújul: \(entry.renewalDay). nap", "Renews: day \(entry.renewalDay)"),
+                              systemImage: "arrow.triangle.2.circlepath")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if entry.isRecurring {
                         Label(tr("Minden hónapban", "Every month"),
                               systemImage: "arrow.triangle.2.circlepath")
                             .font(.caption)
@@ -230,6 +252,11 @@ struct EntryListView: View {
                     .fontWeight(.semibold)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+            }
+            if kind == .expense, let cat = categories.first(where: { $0.id == entry.categoryID }) {
+                Label(cat.name, systemImage: cat.symbol)
+                    .font(.caption)
+                    .foregroundStyle(cat.color)
             }
             if kind == .saving, entry.targetAmount > 0 {
                 ProgressView(value: min(entry.savedSoFar, entry.targetAmount),

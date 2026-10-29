@@ -11,6 +11,8 @@ struct QuickAddView: View {
     @State private var amount: Double?
     @State private var note = ""
     @State private var date = Date.now
+    @State private var categoryID = ""
+    @Query(sort: \Category.createdAt) private var categories: [Category]
 
     var body: some View {
         let tr = store.tr
@@ -26,6 +28,14 @@ struct QuickAddView: View {
                         .keyboardType(.decimalPad)
                         .font(.title2.bold())
                     TextField(tr("Megjegyzés (nem kötelező)", "Note (optional)"), text: $note)
+                    if kind == .expense {
+                        Picker(tr("Kategória", "Category"), selection: $categoryID) {
+                            Text(tr("Nincs", "None")).tag("")
+                            ForEach(categories) { c in
+                                Label(c.name, systemImage: c.symbol).tag(c.id)
+                            }
+                        }
+                    }
                 }
                 Section {
                     DatePicker(tr("Mikor", "When"), selection: $date, displayedComponents: .date)
@@ -58,7 +68,8 @@ struct QuickAddView: View {
             : tr("Egyszeri kiadás", "One-time expense")
         context.insert(Entry(name: clean.isEmpty ? fallback : clean,
                              amount: amount ?? 0, kind: kind,
-                             isRecurring: false, date: date))
+                             isRecurring: false, date: date,
+                             categoryID: kind == .expense ? categoryID : ""))
         Haptics.success()
         dismiss()
     }
