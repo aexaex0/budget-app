@@ -15,6 +15,7 @@ struct EntryListView: View {
     @State private var editing: Entry?
     @State private var newEntry: NewEntry?
     @State private var showCalc = false
+    @State private var showSlot = false
     @Query(sort: \Category.createdAt) private var categories: [Category]
 
     init(kind: EntryKind) {
@@ -70,6 +71,17 @@ struct EntryListView: View {
             addButton(tr).padding(.bottom, 12)
         }
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                if kind == .income {
+                    Button {
+                        Haptics.tap()
+                        showSlot = true
+                    } label: {
+                        Image(systemName: "die.face.5.fill")
+                    }
+                    .accessibilityLabel("Slot")
+                }
+            }
             ToolbarItem(placement: .topBarLeading) {
                 if kind == .expense {
                     NavigationLink {
@@ -88,6 +100,7 @@ struct EntryListView: View {
         .sheet(item: $newEntry) { EntryEditor(kind: kind, entry: nil, recurring: $0.recurring) }
         .sheet(item: $editing) { EntryEditor(kind: kind, entry: $0) }
         .sheet(isPresented: $showCalc) { GoalCalculatorView() }
+        .fullScreenCover(isPresented: $showSlot) { SlotGameView() }
     }
 
     // MARK: Részek
