@@ -131,22 +131,29 @@ struct SlotGameView: View {
             : Multiplier.values.map { "\($0)x" }
         return HStack(spacing: 8) {
             ForEach(labels.indices, id: \.self) { i in
-                let on = i == engine.multIndex
-                Text(labels[i])
-                    .font(.system(size: engine.jackpotMode ? 13 : 20, weight: .heavy, design: .rounded))
-                    .minimumScaleFactor(0.6)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 46)
-                    .foregroundStyle(on ? Color.black : Color.white)
-                    .background(on ? Color.yellow : Color.white.opacity(0.12), in: .rect(cornerRadius: 14))
-                    .scaleEffect(on ? 1.1 : 1)
-                    .shadow(color: on ? Color.yellow.opacity(0.7) : Color.clear, radius: 10)
+                multCell(labels[i], on: i == engine.multIndex)
             }
         }
         .animation(.easeOut(duration: 0.08), value: engine.multIndex)
         .padding(8)
         .background(Color.white.opacity(0.08), in: .rect(cornerRadius: 22))
+    }
+
+    private func multCell(_ text: String, on: Bool) -> some View {
+        let fill: Color = on ? Color.yellow : Color.white.opacity(0.12)
+        let fg: Color = on ? Color.black : Color.white
+        let glow: Color = on ? Color.yellow.opacity(0.7) : Color.clear
+        let fontSize: CGFloat = engine.jackpotMode ? 13 : 20
+        return Text(text)
+            .font(.system(size: fontSize, weight: .heavy, design: .rounded))
+            .minimumScaleFactor(0.6)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .foregroundStyle(fg)
+            .background(fill, in: .rect(cornerRadius: 14))
+            .scaleEffect(on ? 1.1 : 1)
+            .shadow(color: glow, radius: 10)
     }
 
     // MARK: 3x3-as rács (valódi görgetés)
