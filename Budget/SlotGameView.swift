@@ -76,7 +76,16 @@ struct SlotGameView: View {
                 .padding(.vertical, 8)
                 .glassEffect(.regular, in: .capsule)
             Spacer()
-            Color.clear.frame(width: 44, height: 44)
+            Button {
+                Haptics.tap()
+                engine.sound.toggle()
+            } label: {
+                Image(systemName: engine.sound ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                    .font(.headline)
+                    .frame(width: 44, height: 44)
+                    .glassEffect(.regular.interactive(), in: .circle)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -140,7 +149,10 @@ struct SlotGameView: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 22))
     }
 
-    // MARK: 3x3-as rács
+    // MARK: 3x3-as rács (valódi görgetés)
+
+    private let cellSize: CGFloat = 92
+    private let gap: CGFloat = 10
 
     private func isWinning(col: Int, row: Int) -> Bool {
         engine.winLines.contains { i in
@@ -148,41 +160,58 @@ struct SlotGameView: View {
         }
     }
 
-    private func cell(col: Int, row: Int) -> some View {
-        let sym = engine.grid[col][row]
-        let spinning = engine.spinningCols[col]
-        let win = isWinning(col: col, row: row)
-        return Text(sym.glyph)
-            .font(.system(size: 44))
-            .minimumScaleFactor(0.5)
-            .frame(maxWidth: .infinity)
-            .aspectRatio(1, contentMode: .fit)
-            .background(Color.white.opacity(0.10), in: .rect(cornerRadius: 18))
-            .blur(radius: spinning ? 2.5 : 0)
-            .overlay(
+    private func winOverlay(_ col: Int) -> some View {
+        VStack(spacing: gap) {
+            ForEach(0..<3, id: \.self) { row in
+                let win = isWinning(col: col, row: row)
                 RoundedRectangle(cornerRadius: 18)
                     .strokeBorder(win ? Color.yellow : Color.clear, lineWidth: 3)
-            )
-            .shadow(color: win ? Color.yellow.opacity(0.8) : Color.clear, radius: 12)
-            .scaleEffect(win ? 1.06 : 1)
-            .animation(.spring(duration: 0.3, bounce: 0.4), value: win)
+                    .frame(width: cellSize, height: cellSize)
+                    .shadow(color: win ? Color.yellow.opacity(0.8) : Color.clear, radius: 12)
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: engine.winLines)
+        .allowsHitTesting(false)
+    }
+
+    private func reelColumn(_ col: Int) -> some View {
+        let strip = engine.strips[col]
+        let travel = CGFloat(max(strip.count - 3, 0)) * (cellSize + gap)
+        let y = -(1 - CGFloat(engine.progress[col])) * travel
+        let spinning = engine.spinningCols[col]
+        return ZStack(alignment: .top) {
+            VStack(spacing: gap) {
+                ForEach(0..<3, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(Color.white.opacity(0.10))
+                        .frame(width: cellSize, height: cellSize)
+                }
+            }
+            VStack(spacing: gap) {
+                ForEach(strip.indices, id: \.self) { i in
+                    Text(strip[i].glyph)
+                        .font(.system(size: 46))
+                        .frame(width: cellSize, height: cellSize)
+                }
+            }
+            .offset(y: y)
+            .blur(radius: spinning ? 1.2 : 0)
+        }
+        .frame(width: cellSize, height: cellSize * 3 + gap * 2, alignment: .top)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay { winOverlay(col) }
+        .offset(y: engine.bounce[col] ? 8 : 0)
+        .animation(.spring(duration: 0.2, bounce: 0.5), value: engine.bounce[col])
     }
 
     private var reels: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: gap) {
             ForEach(0..<3, id: \.self) { col in
-                VStack(spacing: 10) {
-                    ForEach(0..<3, id: \.self) { row in
-                        cell(col: col, row: row)
-                    }
-                }
-                .offset(y: engine.bounce[col] ? 8 : 0)
-                .animation(.spring(duration: 0.2, bounce: 0.5), value: engine.bounce[col])
+                reelColumn(col)
             }
         }
         .padding(12)
         .glassEffect(.regular, in: .rect(cornerRadius: 28))
-        .frame(maxWidth: 340)
         .overlay {
             if let b = engine.winBanner {
                 Text(b)

@@ -10,13 +10,17 @@ struct Particle {
     let rotSpeed: Double
     let color: Color
     let emoji: String?     // nil = konfetti szelet
+    var burst = false      // alulról kilőtt konfetti
+    var vx = 0.0
+    var vy = 0.0
 }
 
 enum ParticleFactory {
     /// Minél nagyobb a nyeremény a tét többszöröseként, annál több konfetti és pénzeső.
     static func make(ratio: Double, jackpot: Bool) -> [Particle] {
-        let confettiCount: Int = jackpot ? 380 : min(Int(24 + ratio * 4), 320)
-        let coinCount: Int = jackpot ? 120 : (ratio >= 15 ? min(Int(ratio), 90) : 0)
+        let confettiCount: Int = jackpot ? 520 : min(Int(24 + ratio * 5), 420)
+        let coinCount: Int = jackpot ? 160 : (ratio >= 15 ? min(Int(ratio * 1.5), 120) : 0)
+        let burstCount: Int = jackpot ? 260 : (ratio >= 15 ? min(Int(ratio * 3), 200) : 0)
         let colors: [Color] = [.red, .orange, .yellow, .green, .mint, .cyan, .blue, .purple, .pink]
         let coins: [String] = ["💰", "💵", "🪙", "💸"]
         var out: [Particle] = []
@@ -45,6 +49,22 @@ enum ParticleFactory {
                 color: .yellow,
                 emoji: coins.randomElement() ?? "💰"))
         }
+        for i in 0..<burstCount {
+            let left = i % 2 == 0
+            out.append(Particle(
+                x: left ? 0 : 1,
+                delay: Double.random(in: 0...0.5),
+                speed: 0,
+                size: Double.random(in: 8...15),
+                swayAmp: 0,
+                swayFreq: 1,
+                rotSpeed: Double.random(in: -12...12),
+                color: colors.randomElement() ?? .yellow,
+                emoji: nil,
+                burst: true,
+                vx: (left ? 1 : -1) * Double.random(in: 80...380),
+                vy: -Double.random(in: 650...1150)))
+        }
         return out
     }
 }
@@ -63,12 +83,27 @@ struct CelebrationView: View {
         TimelineView(.animation) { ctx in
             Canvas { context, size in
                 let t = ctx.date.timeIntervalSince(celebration.start)
+                if celebration.ratio >= 15 || celebration.jackpot {
+                    let a = max(0, 0.45 - t * 0.9)
+                    if a > 0 {
+                        context.fill(Path(CGRect(origin: .zero, size: size)),
+                                     with: .color(Color.yellow.opacity(a)))
+                    }
+                }
                 for p in particles {
                     let lt = t - p.delay
                     if lt < 0 { continue }
-                    let y = -30 + lt * p.speed
-                    if y > size.height + 40 { continue }
-                    let x = p.x * size.width + sin(lt * p.swayFreq) * p.swayAmp
+                    var x: Double
+                    var y: Double
+                    if p.burst {
+                        x = p.x * size.width + p.vx * lt
+                        y = size.height * 0.85 + p.vy * lt + 520 * lt * lt
+                        if y > size.height + 40 && lt > 0.4 { continue }
+                    } else {
+                        y = -30 + lt * p.speed
+                        if y > size.height + 40 { continue }
+                        x = p.x * size.width + sin(lt * p.swayFreq) * p.swayAmp
+                    }
                     if let e = p.emoji {
                         context.draw(Text(e).font(.system(size: p.size)), at: CGPoint(x: x, y: y))
                     } else {

@@ -21,6 +21,11 @@ final class SlotEngine: ObservableObject {
     @Published var balance: Double = 0
     @Published var bet: Int = 60
     @Published var grid: [[SlotSymbol]] = (0..<3).map { _ in (0..<3).map { _ in SlotSymbol.random() } }
+    @Published var strips: [[SlotSymbol]] = (0..<3).map { _ in (0..<3).map { _ in SlotSymbol.random() } }
+    @Published var progress: [Double] = [1, 1, 1]
+    @Published var sound = true {
+        didSet { SlotSound.shared.enabled = sound }
+    }
     @Published var spinningCols: [Bool] = [false, false, false]
     @Published var bounce: [Bool] = [false, false, false]
     @Published var jackpotMode = false
@@ -57,6 +62,7 @@ final class SlotEngine: ObservableObject {
         autoTask?.cancel()
         spinTask?.cancel()
         tickTask?.cancel()
+        SlotSound.shared.stopAll()
         autoSpin = false
     }
 
@@ -92,13 +98,32 @@ final class SlotEngine: ObservableObject {
         tickTask?.cancel()
         tickTask = Task { await self.runTicker() }
 
-        // az oszlopok balról jobbra állnak meg
-        try? await Task.sleep(for: .seconds(0.9 * speed))
+        // valódi görgetés: minden oszlop egy hosszú tekercs, ami legördül a végeredményig
+        let stops: [Double] = [0.9, 1.4, 1.9].map { $0 * speed }
+        withTransaction(Transaction(animation: nil)) {
+            for c in 0..<3 {
+                let rows = max(8, Int(stops[c] * 11))
+                let filler = (0..<rows).map { _ in SlotSymbol.random() }
+                let old = Array(strips[c].prefix(3))
+                strips[c] = outcome.grid[c] + filler + old
+                progress[c] = 0
+            }
+        }
+        try? await Task.sleep(for: .milliseconds(40))
         for c in 0..<3 {
-            if c > 0 { try? await Task.sleep(for: .seconds(0.5 * speed)) }
+            withAnimation(.timingCurve(0.12, 0.35, 0.2, 1.0, duration: stops[c])) {
+                progress[c] = 1
+            }
+        }
+        // az oszlopok balról jobbra állnak meg
+        var elapsed = 0.0
+        for c in 0..<3 {
+            try? await Task.sleep(for: .seconds(max(stops[c] - elapsed, 0)))
+            elapsed = stops[c]
             grid[c] = outcome.grid[c]
             spinningCols[c] = false
             bump(c)
+            SlotSound.shared.play(.stop)
             Haptics.tap(.light)
         }
 
@@ -126,10 +151,8 @@ final class SlotEngine: ObservableObject {
     private func runTicker() async {
         while !Task.isCancelled && (spinningCols.contains(true) || multSpinning) {
             let n = jackpotMode ? 4 : 5
-            for c in 0..<3 where spinningCols[c] {
-                grid[c] = (0..<3).map { _ in SlotSymbol.random() }
-            }
             if multSpinning { multIndex = (multIndex + 1) % n }
+            SlotSound.shared.play(.tick)
             try? await Task.sleep(for: .seconds(fast ? 0.045 : 0.07))
         }
     }
@@ -140,11 +163,13 @@ final class SlotEngine: ObservableObject {
         let delays: [Double] = [0.09, 0.12, 0.17, 0.24, 0.34]
         for d in delays {
             multIndex = (multIndex + 1) % n
+            SlotSound.shared.play(.tick)
             try? await Task.sleep(for: .seconds(d * speed))
         }
         var guardCount = 0
         while multIndex != target && guardCount < 12 {
             multIndex = (multIndex + 1) % n
+            SlotSound.shared.play(.tick)
             Haptics.tap(.soft)
             try? await Task.sleep(for: .seconds(0.38 * speed))
             guardCount += 1
@@ -184,6 +209,11 @@ final class SlotEngine: ObservableObject {
         if let banner {
             withAnimation(.spring(duration: 0.45, bounce: 0.4)) { winBanner = banner }
         }
+        if outcome.jackpot != nil { SlotSound.shared.play(.jackpot) }
+        else if ratio >= 100 { SlotSound.shared.play(.mega) }
+        else if ratio >= 40 { SlotSound.shared.play(.mega) }
+        else if ratio >= 15 { SlotSound.shared.play(.big) }
+        else { SlotSound.shared.play(.win) }
         if ratio >= 5 || outcome.jackpot != nil {
             let c = Celebration(ratio: ratio, jackpot: outcome.jackpot != nil)
             celebration = c
@@ -203,6 +233,7 @@ final class SlotEngine: ObservableObject {
         else { dur = 0.6 }
         for i in 1...steps {
             shownWin = total * Double(i) / Double(steps)
+            if i % 4 == 0 { SlotSound.shared.play(.coin) }
             try? await Task.sleep(for: .seconds(dur / Double(steps) * (fast ? 0.5 : 1.0)))
         }
         shownWin = total
