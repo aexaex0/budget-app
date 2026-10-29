@@ -231,19 +231,25 @@ struct OrbsLayer: View {
     let colors: [Color]
     let time: Double
 
+    private func point(_ i: Int, in size: CGSize) -> CGPoint {
+        let f: Double = Double(i)
+        let ax: Double = time * 0.18 + f * 2.1
+        let ay: Double = time * 0.13 + f * 1.7
+        let nx: Double = 0.5 + 0.38 * sin(ax)
+        let ny: Double = 0.5 + 0.40 * cos(ay)
+        return CGPoint(x: Double(size.width) * nx, y: Double(size.height) * ny)
+    }
+
     var body: some View {
         GeometryReader { geo in
+            let d: CGFloat = geo.size.width * 0.75
             ForEach(0..<3, id: \.self) { i in
-                let f = Double(i)
                 Circle()
                     .fill(colors[i % colors.count])
-                    .frame(width: geo.size.width * 0.75, height: geo.size.width * 0.75)
+                    .frame(width: d, height: d)
                     .blur(radius: 70)
                     .opacity(0.6)
-                    .position(
-                        x: geo.size.width * (0.5 + 0.38 * sin(time * 0.18 + f * 2.1)),
-                        y: geo.size.height * (0.5 + 0.40 * cos(time * 0.13 + f * 1.7))
-                    )
+                    .position(point(i, in: geo.size))
             }
         }
     }
