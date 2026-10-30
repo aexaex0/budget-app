@@ -79,8 +79,16 @@ final class Entry {
     }
 
     /// Beleszámít-e az adott hónapba? Ismétlődő: mindig. Egyszeri: csak a saját hónapjában.
+    /// A havi ismétlődő kiadás, előfizetés és megtakarítás csak a létrehozás utáni hónaptól vonódik le.
+    /// A havi bevétel azonnal számít.
     func counts(in month: Date) -> Bool {
-        isRecurring || Calendar.current.isDate(date, equalTo: month, toGranularity: .month)
+        let cal = Calendar.current
+        if !isRecurring {
+            return cal.isDate(date, equalTo: month, toGranularity: .month)
+        }
+        if kind == .income { return true }
+        guard let firstMonth = cal.date(byAdding: .month, value: 1, to: createdAt) else { return true }
+        return cal.compare(month, to: firstMonth, toGranularity: .month) != .orderedAscending
     }
 }
 
