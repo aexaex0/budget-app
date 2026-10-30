@@ -179,17 +179,17 @@ struct OverviewView: View {
 
                     // Fő kártya
                     VStack(spacing: 6) {
-                        Text(tr("Havonta megmarad", "Left each month"))
+                        Text(tr("Költőpénz", "Spending money"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text(left.ft)
+                        Text(spendingLeft.ft)
                             .font(.system(size: 42, weight: .bold, design: .rounded))
-                            .foregroundStyle(left >= 0 ? Color.primary : Color.red)
+                            .foregroundStyle(spendingLeft >= 0 ? Color.primary : Color.red)
                             .minimumScaleFactor(0.5)
                             .lineLimit(1)
-                            .contentTransition(.numericText(value: left))
-                            .animation(.snappy, value: left)
-                        if left < 0 {
+                            .contentTransition(.numericText(value: spendingLeft))
+                            .animation(.snappy, value: spendingLeft)
+                        if spendingLeft < 0 {
                             Label(tr("Mínuszban", "Negative"),
                                   systemImage: "exclamationmark.triangle.fill")
                                 .font(.footnote)
