@@ -109,7 +109,7 @@ struct EarningsView: View {
                 setupView(tr)
             }
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(NeonBackdrop())
         .navigationTitle(tr("Kereset követő", "Earnings tracker"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
@@ -195,17 +195,24 @@ struct EarningsView: View {
 
     private func field<Content: View>(_ title: String, _ icon: String,
                                       @ViewBuilder content: () -> Content) -> some View {
-        HStack {
+        let neon = Earnings.neon
+        return HStack {
             VStack(alignment: .leading, spacing: 8) {
-                Label(title, systemImage: icon)
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.secondary)
+                Label(title.uppercased(), systemImage: icon)
+                    .font(.caption.weight(.heavy))
+                    .tracking(1.2)
+                    .foregroundStyle(neon.opacity(0.8))
                 content()
             }
             Spacer()
         }
         .padding(18)
-        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(neon.opacity(0.06), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(neon.opacity(0.35), lineWidth: 1)
+        )
+        .shadow(color: neon.opacity(0.18), radius: 14)
     }
 
     // MARK: Élő nézet
@@ -266,50 +273,111 @@ struct EarningsView: View {
 
     private func ring(p: Double, text: String, done: Bool, _ tr: Tr) -> some View {
         let neon = Earnings.neon
+        let sweep = AngularGradient(
+            colors: [neon.opacity(0.25), Color(red: 0, green: 0.85, blue: 0.9), neon],
+            center: .center, startAngle: .degrees(0), endAngle: .degrees(360 * max(p, 0.001)))
         return GeometryReader { geo in
             let d = min(geo.size.width, 330)
             ZStack {
                 Circle()
-                    .stroke(neon.opacity(0.14), lineWidth: 16)
+                    .stroke(neon.opacity(0.10), lineWidth: 18)
+                TickMarks(count: 60)
+                    .stroke(neon.opacity(0.28), lineWidth: 1.5)
+                    .padding(-14)
                 Circle()
                     .trim(from: 0, to: p)
-                    .stroke(neon, style: StrokeStyle(lineWidth: 16, lineCap: .round))
+                    .stroke(sweep, style: StrokeStyle(lineWidth: 18, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                    .shadow(color: neon.opacity(0.9), radius: 12)
-                    .shadow(color: neon.opacity(0.6), radius: 26)
+                    .shadow(color: neon.opacity(0.85), radius: 12)
+                    .shadow(color: neon.opacity(0.5), radius: 28)
+                if p > 0 && p < 1 {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 10, height: 10)
+                        .shadow(color: neon, radius: 8)
+                        .offset(y: -d / 2 + 9)
+                        .rotationEffect(.degrees(360 * p))
+                }
                 VStack(spacing: 8) {
-                    if done {
-                        Text("Vége! 🎉")
-                            .font(.system(size: 30, weight: .heavy, design: .rounded))
-                            .foregroundStyle(.white)
-                    }
+                    Text(done ? "Vége! 🎉" : tr("KERESETT", "EARNED"))
+                        .font(.system(size: done ? 30 : 12, weight: .heavy, design: .rounded))
+                        .tracking(done ? 0 : 3)
+                        .foregroundStyle(done ? Color.white : neon.opacity(0.7))
                     Text(text)
-                        .font(.system(size: 34, weight: .heavy, design: .rounded).monospacedDigit())
-                        .foregroundStyle(neon)
-                        .shadow(color: neon.opacity(0.9), radius: 10)
+                        .font(.system(size: 36, weight: .heavy, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .shadow(color: neon, radius: 14)
+                        .shadow(color: neon.opacity(0.6), radius: 4)
                         .minimumScaleFactor(0.5)
                         .lineLimit(1)
                 }
-                .padding(.horizontal, 30)
+                .padding(.horizontal, 34)
             }
             .frame(width: d, height: d)
             .frame(maxWidth: .infinity)
         }
         .aspectRatio(1, contentMode: .fit)
-        .padding(.horizontal, 30)
+        .padding(.horizontal, 34)
     }
 
     private func bar(_ p: Double) -> some View {
         let neon = Earnings.neon
+        let fill = LinearGradient(colors: [Color(red: 0, green: 0.85, blue: 0.9), neon],
+                                  startPoint: .leading, endPoint: .trailing)
         return GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(neon.opacity(0.14))
+                Capsule().fill(neon.opacity(0.12))
                 Capsule()
-                    .fill(neon)
+                    .fill(fill)
                     .frame(width: max(geo.size.width * p, 0))
-                    .shadow(color: neon.opacity(0.9), radius: 8)
+                    .shadow(color: neon.opacity(0.9), radius: 9)
             }
         }
-        .frame(height: 12)
+        .frame(height: 14)
+        .overlay(Capsule().stroke(neon.opacity(0.3), lineWidth: 1))
+    }
+}
+
+/// Fekete háttér halvány neon fénnyel és ráccsal.
+struct NeonBackdrop: View {
+    var body: some View {
+        ZStack {
+            Color.black
+            RadialGradient(colors: [Earnings.neon.opacity(0.16), .clear],
+                           center: .center, startRadius: 0, endRadius: 420)
+            Canvas { ctx, size in
+                var path = Path()
+                var x = 0.0
+                while x < size.width {
+                    path.move(to: CGPoint(x: x, y: 0))
+                    path.addLine(to: CGPoint(x: x, y: size.height))
+                    x += 34
+                }
+                var y = 0.0
+                while y < size.height {
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: size.width, y: y))
+                    y += 34
+                }
+                ctx.stroke(path, with: .color(Earnings.neon.opacity(0.045)), lineWidth: 1)
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+struct TickMarks: Shape {
+    let count: Int
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let r = min(rect.width, rect.height) / 2
+        for i in 0..<count {
+            let a = Double(i) / Double(count) * 2 * Double.pi
+            let len: Double = i % 5 == 0 ? 9 : 4
+            p.move(to: CGPoint(x: c.x + cos(a) * r, y: c.y + sin(a) * r))
+            p.addLine(to: CGPoint(x: c.x + cos(a) * (r - len), y: c.y + sin(a) * (r - len)))
+        }
+        return p
     }
 }
