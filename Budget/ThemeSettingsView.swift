@@ -31,6 +31,10 @@ struct ThemeSettingsView: View {
                         .pickerStyle(.segmented)
                     }
 
+                    section(tr("Ikon", "App icon")) {
+                        AppIconPicker()
+                    }
+
                     NavigationLink {
                         CategoriesView()
                     } label: {

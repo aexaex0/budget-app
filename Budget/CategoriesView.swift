@@ -32,6 +32,7 @@ struct CategoriesView: View {
                             .fill(.clear)
                             .glassEffect(.regular, in: .rect(cornerRadius: 20))
                             .padding(.vertical, 3)
+                            .padding(.horizontal, 16)
                     )
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 10, leading: 18, bottom: 10, trailing: 18))

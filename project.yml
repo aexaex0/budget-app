@@ -19,6 +19,7 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon02 AppIcon03 AppIcon04 AppIcon05 AppIcon06 AppIcon07 AppIcon08"
         INFOPLIST_KEY_NSFaceIDUsageDescription: "A pénzügyi adataid védelméhez."
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         TARGETED_DEVICE_FAMILY: "1"
