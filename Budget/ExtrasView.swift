@@ -72,6 +72,14 @@ struct ExtrasView: View {
                     .buttonStyle(.plain)
 
                     NavigationLink {
+                        EarningsView()
+                    } label: {
+                        tile(icon: "bolt.fill", color: .green, title: tr("Kereset követő", "Earnings tracker"),
+                             subtitle: tr("Élő összeg", "Live amount"))
+                    }
+                    .buttonStyle(.plain)
+
+                    NavigationLink {
                         SplitView()
                     } label: {
                         tile(icon: "person.2.fill", color: .green,
