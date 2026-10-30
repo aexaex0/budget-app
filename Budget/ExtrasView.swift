@@ -4,6 +4,7 @@ struct ExtrasView: View {
     @EnvironmentObject private var store: ThemeStore
     @State private var showSlot = false
     @State private var showBJ = false
+    @State private var showPlinko = false
 
     var body: some View {
         let tr = store.tr
@@ -24,6 +25,15 @@ struct ExtrasView: View {
                         showBJ = true
                     } label: {
                         tile(icon: "suit.spade.fill", color: .indigo, title: "Blackjack",
+                             subtitle: tr("Demó", "Demo"))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        Haptics.tap(.medium)
+                        showPlinko = true
+                    } label: {
+                        tile(icon: "circle.grid.3x3.fill", color: .mint, title: "Plinko",
                              subtitle: tr("Demó", "Demo"))
                     }
                     .buttonStyle(.plain)
@@ -77,6 +87,7 @@ struct ExtrasView: View {
         }
         .fullScreenCover(isPresented: $showSlot) { SlotGameView() }
         .fullScreenCover(isPresented: $showBJ) { BlackjackView() }
+        .fullScreenCover(isPresented: $showPlinko) { PlinkoView() }
     }
 
     private func tile(icon: String, color: Color, title: String, subtitle: String) -> some View {

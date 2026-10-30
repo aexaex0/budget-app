@@ -1,18 +1,82 @@
 import SwiftUI
 
-/// Fülváltáskor a tartalom finoman becsúszik és előúszik, nem snappel.
+/// Fülváltás animáció. A stílus a Beállításokban választható.
+enum TabAnimStyle: String, CaseIterable, Identifiable {
+    case none, fade, slide, rise, zoom, spring
+    var id: String { rawValue }
+
+    func title(_ tr: Tr) -> String {
+        switch self {
+        case .none: return tr("Nincs", "None")
+        case .fade: return tr("Áttűnés", "Fade")
+        case .slide: return tr("Csúszás", "Slide")
+        case .rise: return tr("Emelkedés", "Rise")
+        case .zoom: return tr("Nagyítás", "Zoom")
+        case .spring: return tr("Rugó", "Spring")
+        }
+    }
+}
+
 struct TabEntrance: ViewModifier {
+    @AppStorage("tabAnim") private var styleRaw = TabAnimStyle.fade.rawValue
     @State private var shown = false
+    @State private var animating = false
+
+    private var style: TabAnimStyle { TabAnimStyle(rawValue: styleRaw) ?? .fade }
+
+    private var opacityValue: Double {
+        if style == .none || shown { return 1 }
+        return 0
+    }
+
+    private var offsetX: CGFloat {
+        style == .slide && !shown ? 70 : 0
+    }
+
+    private var offsetY: CGFloat {
+        if shown { return 0 }
+        if style == .rise { return 30 }
+        if style == .spring { return 70 }
+        return 0
+    }
+
+    private var scaleValue: CGFloat {
+        style == .zoom && !shown ? 0.92 : 1
+    }
+
+    private var animation: Animation {
+        switch style {
+        case .spring: return .spring(duration: 0.6, bounce: 0.4)
+        case .slide: return .easeOut(duration: 0.35)
+        case .fade: return .easeInOut(duration: 0.3)
+        default: return .spring(duration: 0.45, bounce: 0.1)
+        }
+    }
 
     func body(content: Content) -> some View {
         content
-            .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : 28)
-            .scaleEffect(shown ? 1 : 0.97)
-            .onAppear {
-                withAnimation(.spring(duration: 0.5, bounce: 0.15)) { shown = true }
+            .opacity(opacityValue)
+            .offset(x: offsetX, y: offsetY)
+            .scaleEffect(scaleValue)
+            .background {
+                // animáció közben a téma háttere látszik, nem a fekete
+                if animating { AppBackground().ignoresSafeArea() }
             }
-            .onDisappear { shown = false }
+            .onAppear {
+                guard style != .none else {
+                    shown = true
+                    return
+                }
+                animating = true
+                withAnimation(animation) { shown = true }
+                Task {
+                    try? await Task.sleep(for: .seconds(0.8))
+                    animating = false
+                }
+            }
+            .onDisappear {
+                shown = false
+            }
     }
 }
 

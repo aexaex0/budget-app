@@ -30,7 +30,14 @@ func handTotal(_ cards: [PlayingCard]) -> Int {
     return total
 }
 
-/// Demó blackjack: nem érinti a valódi adatokat.
+struct BJHand: Identifiable {
+    let id = UUID()
+    var cards: [PlayingCard]
+    var wager: Double
+    var fromSplitAces = false
+}
+
+/// Demó blackjack: nem érinti a valódi adatokat. Van double és split (max 4 kéz).
 @MainActor
 final class BlackjackEngine: ObservableObject {
     enum Phase { case betting, player, dealer, done }
@@ -40,15 +47,28 @@ final class BlackjackEngine: ObservableObject {
     @Published var balance: Double = 0
     @Published var bet: Int = 100
     @Published var phase: Phase = .betting
-    @Published var player: [PlayingCard] = []
+    @Published var hands: [BJHand] = []
+    @Published var active = 0
     @Published var dealer: [PlayingCard] = []
     @Published var holeHidden = true
     @Published var message: String?
-    @Published var wager: Double = 0
     @Published var celebration: Celebration?
 
     private var shoe: [PlayingCard] = []
     private var task: Task<Void, Never>?
+
+    var totalWager: Double { hands.reduce(0) { $0 + $1.wager } }
+
+    var canDouble: Bool {
+        guard phase == .player, hands.indices.contains(active) else { return false }
+        return hands[active].cards.count == 2 && balance >= hands[active].wager
+    }
+
+    var canSplit: Bool {
+        guard phase == .player, hands.count < 4, hands.indices.contains(active) else { return false }
+        let h = hands[active]
+        return h.cards.count == 2 && h.cards[0].value == h.cards[1].value && balance >= h.wager
+    }
 
     func reset(balance: Double) {
         self.balance = balance
@@ -57,12 +77,10 @@ final class BlackjackEngine: ObservableObject {
         }
     }
 
-    func stop() {
-        task?.cancel()
-    }
+    func stop() { task?.cancel() }
 
     private func draw() -> PlayingCard {
-        if shoe.count < 30 {
+        if shoe.count < 40 {
             var cards: [PlayingCard] = []
             for _ in 0..<6 {
                 for s in 0..<4 {
@@ -78,6 +96,12 @@ final class BlackjackEngine: ObservableObject {
         try? await Task.sleep(for: .seconds(s))
     }
 
+    private func give(_ hand: Int) {
+        guard hands.indices.contains(hand) else { return }
+        withAnimation(.spring(duration: 0.35)) { hands[hand].cards.append(draw()) }
+        SlotSound.shared.play(.tick)
+    }
+
     func deal() {
         guard phase == .betting || phase == .done, balance >= Double(bet) else { return }
         task?.cancel()
@@ -85,57 +109,85 @@ final class BlackjackEngine: ObservableObject {
     }
 
     private func dealRound() async {
-        wager = Double(bet)
-        balance -= wager
+        balance -= Double(bet)
         Stats.add("bj")
         message = nil
         celebration = nil
-        player = []
         dealer = []
         holeHidden = true
+        active = 0
+        hands = [BJHand(cards: [], wager: Double(bet))]
         phase = .player
-        withAnimation(.spring(duration: 0.35)) { player.append(draw()) }
-        SlotSound.shared.play(.tick)
+        give(0)
         await pause(0.3)
         withAnimation(.spring(duration: 0.35)) { dealer.append(draw()) }
         SlotSound.shared.play(.tick)
         await pause(0.3)
-        withAnimation(.spring(duration: 0.35)) { player.append(draw()) }
-        SlotSound.shared.play(.tick)
+        give(0)
         await pause(0.3)
         withAnimation(.spring(duration: 0.35)) { dealer.append(draw()) }
         SlotSound.shared.play(.tick)
         await pause(0.4)
-        if handTotal(player) == 21 {
+        if handTotal(hands[0].cards) == 21 {
             await dealerPlay()
         }
     }
 
     func hit() {
-        guard phase == .player else { return }
-        withAnimation(.spring(duration: 0.35)) { player.append(draw()) }
-        SlotSound.shared.play(.tick)
+        guard phase == .player, hands.indices.contains(active) else { return }
+        give(active)
         Haptics.tap(.light)
-        let t = handTotal(player)
-        if t > 21 {
-            task = Task { await dealerPlay() }
-        } else if t == 21 {
-            stand()
-        }
+        let t = handTotal(hands[active].cards)
+        if t >= 21 { finishCurrent() }
     }
 
     func stand() {
         guard phase == .player else { return }
-        task = Task { await dealerPlay() }
+        finishCurrent()
     }
 
     func double() {
-        guard phase == .player, player.count == 2, balance >= wager else { return }
-        balance -= wager
-        wager *= 2
-        withAnimation(.spring(duration: 0.35)) { player.append(draw()) }
-        SlotSound.shared.play(.tick)
-        task = Task { await dealerPlay() }
+        guard canDouble else { return }
+        balance -= hands[active].wager
+        hands[active].wager *= 2
+        give(active)
+        finishCurrent()
+    }
+
+    func split() {
+        guard canSplit else { return }
+        let h = hands[active]
+        balance -= h.wager
+        let aces = h.cards[0].rank == 1
+        let moved = h.cards[1]
+        hands[active].cards.removeLast()
+        hands[active].fromSplitAces = aces
+        withAnimation(.spring(duration: 0.35)) {
+            hands.insert(BJHand(cards: [moved], wager: h.wager, fromSplitAces: aces), at: active + 1)
+        }
+        give(active)
+        Haptics.tap(.medium)
+        if aces || handTotal(hands[active].cards) >= 21 { finishCurrent() }
+    }
+
+    private func finishCurrent() {
+        task = Task { await advance() }
+    }
+
+    private func advance() async {
+        if active + 1 < hands.count {
+            await pause(0.35)
+            active += 1
+            if hands[active].cards.count == 1 {
+                give(active)
+                await pause(0.35)
+            }
+            if hands[active].fromSplitAces || handTotal(hands[active].cards) >= 21 {
+                await advance()
+            }
+        } else {
+            await dealerPlay()
+        }
     }
 
     private func dealerPlay() async {
@@ -143,7 +195,8 @@ final class BlackjackEngine: ObservableObject {
         await pause(0.4)
         withAnimation(.spring(duration: 0.35)) { holeHidden = false }
         await pause(0.6)
-        if handTotal(player) <= 21 {
+        let live = hands.contains { handTotal($0.cards) <= 21 }
+        if live {
             while handTotal(dealer) < 17 && !Task.isCancelled {
                 withAnimation(.spring(duration: 0.35)) { dealer.append(draw()) }
                 SlotSound.shared.play(.tick)
@@ -154,33 +207,44 @@ final class BlackjackEngine: ObservableObject {
     }
 
     private func settle() {
-        let p = handTotal(player)
         let d = handTotal(dealer)
-        let playerBJ = player.count == 2 && p == 21
         let dealerBJ = dealer.count == 2 && d == 21
         var payout = 0.0
-        var text = "Vesztettél"
-        if p > 21 {
-            text = "Bust"
-        } else if playerBJ && !dealerBJ {
-            payout = wager * 2.5
-            text = "Blackjack!"
-        } else if dealerBJ && !playerBJ {
-            text = "Osztó blackjack"
-        } else if d > 21 || p > d {
-            payout = wager * 2
-            text = "Nyertél"
-        } else if p == d {
-            payout = wager
-            text = "Döntetlen"
+        var anyBJ = false
+        for h in hands {
+            let p = handTotal(h.cards)
+            let natural = hands.count == 1 && h.cards.count == 2 && p == 21
+            if p > 21 { continue }
+            if natural && !dealerBJ {
+                payout += h.wager * 2.5
+                anyBJ = true
+            } else if dealerBJ && !natural {
+                continue
+            } else if d > 21 || p > d {
+                payout += h.wager * 2
+            } else if p == d {
+                payout += h.wager
+            }
         }
+        let net = payout - totalWager
         balance += payout
-        message = text
+        if hands.count == 1 {
+            let p = handTotal(hands[0].cards)
+            if p > 21 { message = "Bust" }
+            else if anyBJ { message = "Blackjack!" }
+            else if dealerBJ && payout == 0 { message = "Osztó blackjack" }
+            else if net > 0 { message = "Nyertél" }
+            else if net == 0 { message = "Döntetlen" }
+            else { message = "Vesztettél" }
+        } else {
+            let sign = net > 0 ? "+" : ""
+            message = net == 0 ? "Döntetlen" : sign + net.ft
+        }
         phase = .done
-        if payout > wager {
-            SlotSound.shared.play(playerBJ ? .big : .win)
+        if net > 0 {
+            SlotSound.shared.play(anyBJ ? .big : .win)
             Haptics.success()
-            let c = Celebration(ratio: playerBJ ? 14 : 6, jackpot: false)
+            let c = Celebration(ratio: anyBJ ? 14 : 6, jackpot: false)
             celebration = c
             Task {
                 try? await Task.sleep(for: .seconds(c.lifetime))
@@ -332,21 +396,31 @@ struct BlackjackView: View {
     }
 
     private var playerArea: some View {
-        VStack(spacing: 8) {
-            hand(engine.player, hideSecond: false)
-            HStack(spacing: 10) {
-                Text(engine.player.isEmpty ? " " : "\(handTotal(engine.player))")
-                    .font(.system(size: 22, weight: .heavy, design: .rounded))
-                if engine.wager > 0 && engine.phase != .betting {
-                    Text(engine.wager.ft)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Color.yellow.opacity(0.25), in: .capsule)
+        let n = engine.hands.count
+        let scale: CGFloat = n <= 1 ? 1 : (n == 2 ? 0.85 : 0.66)
+        return HStack(alignment: .top, spacing: n <= 1 ? 0 : 6) {
+            ForEach(Array(engine.hands.enumerated()), id: \.element.id) { idx, h in
+                let isActive = engine.phase == .player && idx == engine.active && n > 1
+                VStack(spacing: 8) {
+                    hand(h.cards, hideSecond: false)
+                    VStack(spacing: 4) {
+                        Text(h.cards.isEmpty ? " " : "\(handTotal(h.cards))")
+                            .font(.system(size: 22, weight: .heavy, design: .rounded))
+                        Text(h.wager.ft)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 3)
+                            .background(Color.yellow.opacity(0.25), in: .capsule)
+                    }
                 }
+                .padding(6)
+                .background(isActive ? Color.white.opacity(0.14) : Color.clear,
+                            in: .rect(cornerRadius: 16))
+                .scaleEffect(scale)
+                .frame(width: n <= 1 ? nil : (n == 2 ? 130 : 96))
             }
-            .frame(height: 28)
         }
+        .animation(.spring(duration: 0.35), value: engine.hands.count)
     }
 
     @ViewBuilder
@@ -395,8 +469,11 @@ struct BlackjackView: View {
                 actionButton("HIT", .green) { engine.hit() }
                 actionButton("STAND", .red) { engine.stand() }
                 actionButton("DOUBLE", .orange) { engine.double() }
-                    .opacity(engine.player.count == 2 && engine.balance >= engine.wager ? 1 : 0.4)
-                    .disabled(!(engine.player.count == 2 && engine.balance >= engine.wager))
+                    .opacity(engine.canDouble ? 1 : 0.4)
+                    .disabled(!engine.canDouble)
+                if engine.canSplit {
+                    actionButton("SPLIT", .purple) { engine.split() }
+                }
             }
         case .dealer:
             Color.clear.frame(height: 62)
@@ -409,7 +486,8 @@ struct BlackjackView: View {
             action()
         } label: {
             Text(title)
-                .font(.system(size: 16, weight: .heavy, design: .rounded))
+                .font(.system(size: 14, weight: .heavy, design: .rounded))
+                .minimumScaleFactor(0.7)
                 .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 62)

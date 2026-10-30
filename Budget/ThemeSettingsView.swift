@@ -31,6 +31,10 @@ struct ThemeSettingsView: View {
                         .pickerStyle(.segmented)
                     }
 
+                    section(tr("Fülváltás animáció", "Tab animation")) {
+                        TabAnimPicker()
+                    }
+
                     section(tr("Ikon", "App icon")) {
                         AppIconPicker()
                     }
@@ -230,5 +234,35 @@ struct ThemeSettingsView: View {
             get: { store.theme.accent.color },
             set: { c in edit { $0.accent = RGBA(color: c) } }
         )
+    }
+}
+
+struct TabAnimPicker: View {
+    @EnvironmentObject private var store: ThemeStore
+    @AppStorage("tabAnim") private var styleRaw = TabAnimStyle.fade.rawValue
+
+    private let columns = [GridItem(.adaptive(minimum: 96), spacing: 8)]
+
+    var body: some View {
+        let tr = store.tr
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(TabAnimStyle.allCases) { s in
+                let on = styleRaw == s.rawValue
+                Button {
+                    Haptics.tap(.soft)
+                    styleRaw = s.rawValue
+                } label: {
+                    Text(s.title(tr))
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .foregroundStyle(on ? Color.white : Color.primary)
+                        .background(on ? Color.accentColor : Color.secondary.opacity(0.15), in: .capsule)
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 }

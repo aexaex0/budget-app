@@ -6,10 +6,11 @@ struct Celebration: Identifiable {
     let jackpot: Bool
     let start = Date()
 
+    /// Addig él, amíg az utolsó konfetti és emoji is lehullik a képernyőn.
     var lifetime: Double {
-        if jackpot || ratio >= 100 { return 6.5 }
-        if ratio >= 40 { return 5.0 }
-        return 3.8
+        if jackpot || ratio >= 100 { return 10.0 }
+        if ratio >= 40 { return 9.0 }
+        return 8.0
     }
 }
 

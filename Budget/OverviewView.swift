@@ -378,7 +378,7 @@ struct OverviewView: View {
             SlotSound.shared.play(.coin)
             Haptics.success()
             Task {
-                try? await Task.sleep(for: .seconds(3.5))
+                try? await Task.sleep(for: .seconds(c.lifetime))
                 if celebration?.id == c.id { celebration = nil }
             }
         }
