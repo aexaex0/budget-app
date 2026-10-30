@@ -72,7 +72,14 @@ struct OverviewView: View {
     // MARK: Számítások
 
     private func sum(_ kind: EntryKind, in m: Date) -> Double {
-        entries.filter { $0.kind == kind && $0.counts(in: m) }.reduce(0) { $0 + $1.amount }
+        entries.filter { $0.kind == kind && $0.categoryID != "piggy" && $0.counts(in: m) }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    /// Piggy Bankba (+) vagy onnan ki (−) mozgatott összeg az adott hónapban.
+    private func piggyMoves(in m: Date) -> Double {
+        entries.filter { $0.kind == .saving && $0.categoryID == "piggy" && $0.counts(in: m) }
+            .reduce(0) { $0 + $1.amount }
     }
 
     private func oneTimeTotal(_ kind: EntryKind) -> Double {
@@ -142,10 +149,8 @@ struct OverviewView: View {
         let cal = Calendar.current
         let isCurrent = cal.isDate(month, equalTo: .now, toGranularity: .month)
         let daysLeft = isCurrent ? max(daysInMonth - cal.component(.day, from: .now) + 1, 1) : daysInMonth
-        let perDay = max(left, 0) / Double(daysLeft)
-
-        let oneTimeSpent = oneTimeTotal(.expense)
-        let allowance = left + oneTimeSpent
+        let spendingLeft = left - piggyMoves(in: month)
+        let perDay = max(spendingLeft, 0) / Double(daysLeft)
 
         let savingEntries = entries.filter { $0.kind == .saving }
         let piggy = savingEntries.reduce(0) { $0 + $1.savedSoFar }
@@ -210,7 +215,7 @@ struct OverviewView: View {
                             .glassCard(20)
                     }
 
-                    SpendingMoneyCard(allowance: allowance, spent: oneTimeSpent)
+                    MoneySplitCard(spending: spendingLeft, piggy: piggy)
 
                     PiggyBankCard(saved: piggy, target: goalsTarget) { showDeposit = true }
 

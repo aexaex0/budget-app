@@ -4,35 +4,34 @@ import Charts
 
 // MARK: - Költőpénz
 
-struct SpendingMoneyCard: View {
+struct MoneySplitCard: View {
     @EnvironmentObject private var store: ThemeStore
-    let allowance: Double   // amennyi a fix tételek után elkölthető
-    let spent: Double       // egyszeri kiadások ebben a hónapban
+    let spending: Double   // havi bevétel − kiadás − előfizetés − célok − Piggybe tett összeg
+    let piggy: Double
+
+    private func row(_ title: String, _ value: Double, bold: Bool) -> some View {
+        HStack {
+            Text(title)
+                .font(bold ? .headline : .subheadline)
+                .foregroundStyle(bold ? Color.primary : Color.secondary)
+            Spacer(minLength: 8)
+            Text(value.ft)
+                .font(bold ? .title3.bold() : .body.weight(.semibold))
+                .foregroundStyle(value < 0 ? Color.red : Color.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .contentTransition(.numericText(value: value))
+                .animation(.snappy, value: value)
+        }
+    }
 
     var body: some View {
         let tr = store.tr
-        let remaining = allowance - spent
-        let progress = allowance > 0 ? min(max(spent / allowance, 0), 1) : 0
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label(tr("Költőpénz", "Spending money"), systemImage: "creditcard.fill")
-                    .font(.headline)
-                Spacer(minLength: 8)
-                Text(remaining.ft)
-                    .font(.title3.bold())
-                    .foregroundStyle(remaining >= 0 ? Color.primary : Color.red)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .contentTransition(.numericText(value: remaining))
-                    .animation(.snappy, value: remaining)
-            }
-            ProgressView(value: progress)
-                .tint(progress > 0.9 ? Color.red : Color.orange)
-            Text("\(spent.ft) / \(allowance.ft)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+        VStack(spacing: 10) {
+            row(tr("Költőpénz", "Spending money"), spending, bold: false)
+            row("Piggy Bank", piggy, bold: false)
+            Divider()
+            row(tr("Együtt", "Total"), spending + piggy, bold: true)
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -90,7 +89,7 @@ struct DepositView: View {
     @State private var amount: Double?
     @State private var selectedID: PersistentIdentifier?
 
-    private var goals: [Entry] { all.filter { $0.kind == .saving } }
+    private var goals: [Entry] { all.filter { $0.kind == .saving && $0.categoryID != "piggy" } }
 
     var body: some View {
         let tr = store.tr
@@ -152,7 +151,7 @@ struct DepositView: View {
         // A betett (vagy kivett) összeg a havi költőpénzből megy ki / jön vissza.
         if applied != 0 {
             context.insert(Entry(name: "Piggy Bank", amount: applied, kind: .saving,
-                                 isRecurring: false, date: .now))
+                                 isRecurring: false, date: .now, categoryID: "piggy"))
         }
         Haptics.success()
         dismiss()
