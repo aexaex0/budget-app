@@ -27,6 +27,14 @@ jobs:
           mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/Budget.app Payload/
           zip -r Budget.ipa Payload
+      - name: Kísérleti IPA App Group-pal (widget adatokhoz)
+        continue-on-error: true
+        run: |
+          mkdir -p groups/Payload
+          cp -R build/Build/Products/Release-iphoneos/Budget.app groups/Payload/
+          codesign -f -s - --entitlements Config/BudgetWidget.entitlements groups/Payload/Budget.app/PlugIns/BudgetWidget.appex
+          codesign -f -s - --entitlements Config/Budget.entitlements groups/Payload/Budget.app
+          cd groups && zip -r ../Budget-groups.ipa Payload
       - uses: actions/upload-artifact@v4
         with:
           name: Budget-ipa
@@ -37,5 +45,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest Budget.ipa --title "Pocket (legújabb)" \
+          EXTRA=""; [ -f Budget-groups.ipa ] && EXTRA="Budget-groups.ipa"
+          gh release create latest Budget.ipa $EXTRA --title "Pocket (legújabb)" \
             --notes "Automatikus build: ${{ github.sha }}" --target ${{ github.sha }}

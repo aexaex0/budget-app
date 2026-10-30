@@ -45,7 +45,6 @@ struct PiggyBankCard: View {
     let saved: Double
     let target: Double
     let onDeposit: () -> Void
-    var onPlay: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -55,17 +54,6 @@ struct PiggyBankCard: View {
                     Text("Piggy Bank").font(.headline)
                 }
                 Spacer(minLength: 8)
-                Button {
-                    Haptics.tap()
-                    onPlay()
-                } label: {
-                    Image(systemName: "gamecontroller.fill")
-                        .font(.title3)
-                        .frame(width: 44, height: 44)
-                        .glassEffect(.regular.interactive(), in: .circle)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Mini game")
                 Button {
                     Haptics.tap()
                     onDeposit()

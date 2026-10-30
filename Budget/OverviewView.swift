@@ -62,7 +62,6 @@ struct OverviewView: View {
     @State private var showDeposit = false
     @State private var showCalc = false
     @State private var showRecap = false
-    @State private var showPocketGame = false
     @AppStorage("payday") private var payday = 28
     @State private var showStreak = false
     @AppStorage("streakNoSpend") private var noSpend = ""
@@ -226,8 +225,7 @@ struct OverviewView: View {
 
                     MoneySplitCard(spending: spendingLeft, piggy: piggy)
 
-                    PiggyBankCard(saved: piggy, target: goalsTarget, onDeposit: { showDeposit = true },
-                                  onPlay: { showPocketGame = true })
+                    PiggyBankCard(saved: piggy, target: goalsTarget) { showDeposit = true }
 
                     PaydayCard(spendingLeft: spendingLeft)
 
@@ -377,7 +375,6 @@ struct OverviewView: View {
             .sheet(isPresented: $showDeposit) { DepositView() }
             .sheet(isPresented: $showCalc) { GoalCalculatorView() }
             .sheet(isPresented: $showStreak) { StreakSheet() }
-            .fullScreenCover(isPresented: $showPocketGame) { PocketGameView() }
             .sheet(isPresented: $showRecap) { RecapView(embedded: true) }
             .onAppear {
                 sweep = 0
