@@ -3,6 +3,7 @@ import SwiftUI
 struct ExtrasView: View {
     @EnvironmentObject private var store: ThemeStore
     @State private var showSlot = false
+    @State private var showBJ = false
 
     var body: some View {
         let tr = store.tr
@@ -15,6 +16,32 @@ struct ExtrasView: View {
                     } label: {
                         tile(icon: "die.face.5.fill", color: .pink, title: "Slot",
                              subtitle: tr("Demó", "Demo"))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        Haptics.tap(.medium)
+                        showBJ = true
+                    } label: {
+                        tile(icon: "suit.spade.fill", color: .indigo, title: "Blackjack",
+                             subtitle: tr("Demó", "Demo"))
+                    }
+                    .buttonStyle(.plain)
+
+                    NavigationLink {
+                        RecapView()
+                    } label: {
+                        tile(icon: "chart.bar.doc.horizontal.fill", color: .teal,
+                             title: tr("Visszatekintés", "Recap"),
+                             subtitle: tr("Hónap és év", "Month & year"))
+                    }
+                    .buttonStyle(.plain)
+
+                    NavigationLink {
+                        AchievementsView()
+                    } label: {
+                        tile(icon: "trophy.fill", color: .yellow, title: "Achievements",
+                             subtitle: tr("Teljesítmények", "Trophies"))
                     }
                     .buttonStyle(.plain)
 
@@ -49,6 +76,7 @@ struct ExtrasView: View {
             .navigationTitle(tr("Extrák", "Extras"))
         }
         .fullScreenCover(isPresented: $showSlot) { SlotGameView() }
+        .fullScreenCover(isPresented: $showBJ) { BlackjackView() }
     }
 
     private func tile(icon: String, color: Color, title: String, subtitle: String) -> some View {
@@ -70,39 +98,5 @@ struct ExtrasView: View {
         .padding(16)
         .frame(maxWidth: .infinity)
         .glassEffect(.regular, in: .rect(cornerRadius: 26))
-    }
-}
-
-/// Pénz fül: a négy lista egy helyen, felül váltóval.
-struct MoneyView: View {
-    @EnvironmentObject private var store: ThemeStore
-    @State private var kind: EntryKind = .income
-
-    private func label(_ k: EntryKind, _ tr: Tr) -> String {
-        switch k {
-        case .income: return tr("Bevétel", "Income")
-        case .expense: return tr("Kiadás", "Expenses")
-        case .subscription: return tr("Előfiz.", "Subs")
-        case .saving: return tr("Mentés", "Savings")
-        }
-    }
-
-    var body: some View {
-        let tr = store.tr
-        NavigationStack {
-            EntryListView(kind: kind)
-                .id(kind)
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    Picker("", selection: $kind) {
-                        ForEach(EntryKind.allCases) { k in
-                            Text(label(k, tr)).tag(k)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 4)
-                    .onChange(of: kind) { _, _ in Haptics.tap(.soft) }
-                }
-        }
     }
 }

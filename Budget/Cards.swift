@@ -49,7 +49,10 @@ struct PiggyBankCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center) {
-                Label("Piggy Bank", systemImage: "banknote.fill").font(.headline)
+                HStack(spacing: 8) {
+                    PocketBadge()
+                    Text("Piggy Bank").font(.headline)
+                }
                 Spacer(minLength: 8)
                 Button {
                     Haptics.tap()
@@ -232,6 +235,7 @@ struct HistPoint: Identifiable {
 struct HistoryChartCard: View {
     @EnvironmentObject private var store: ThemeStore
     let points: [HistPoint]
+    var title: String? = nil
 
     private func compact(_ v: Double) -> String {
         v.formatted(.number.notation(.compactName).locale(Locale(identifier: Fmt.en ? "en_US" : "hu_HU")))
@@ -242,7 +246,7 @@ struct HistoryChartCard: View {
         let names: [String] = [tr("Bevétel", "Income"), tr("Kiadás", "Spent"), tr("Félretett", "Saved")]
         let colors: [Color] = [.green, .orange, .blue]
         VStack(alignment: .leading, spacing: 12) {
-            Label(tr("6 hónap", "6 months"), systemImage: "chart.bar.fill")
+            Label(title ?? tr("6 hónap", "6 months"), systemImage: "chart.bar.fill")
                 .font(.headline)
             Chart(points) { p in
                 BarMark(x: .value("Hónap", p.label), y: .value("Ft", p.value))

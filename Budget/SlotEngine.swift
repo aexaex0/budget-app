@@ -84,6 +84,7 @@ final class SlotEngine: ObservableObject {
         }
         busy = true
         balance -= b
+        Stats.add("spins")
         winLines = []
         withAnimation(.easeOut(duration: 0.15)) { winBanner = nil }
         celebration = nil
@@ -202,6 +203,7 @@ final class SlotEngine: ObservableObject {
         if let banner {
             withAnimation(.spring(duration: 0.45, bounce: 0.4)) { winBanner = banner }
         }
+        if outcome.jackpot != nil { Stats.add("jackpots") }
         if outcome.jackpot != nil { SlotSound.shared.play(.jackpot) }
         else if ratio >= 100 { SlotSound.shared.play(.mega) }
         else if ratio >= 40 { SlotSound.shared.play(.mega) }

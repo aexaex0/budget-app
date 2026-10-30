@@ -61,6 +61,8 @@ struct OverviewView: View {
     @State private var showQuick = false
     @State private var showDeposit = false
     @State private var showCalc = false
+    @State private var showRecap = false
+    @State private var celebration: Celebration?
     @State private var sweep: CGFloat = 0
     @State private var month: Date = OverviewView.monthStart(Date.now)
 
@@ -151,6 +153,10 @@ struct OverviewView: View {
         let daysLeft = isCurrent ? max(daysInMonth - cal.component(.day, from: .now) + 1, 1) : daysInMonth
         let spendingLeft = left - piggyMoves(in: month)
         let perDay = max(spendingLeft, 0) / Double(daysLeft)
+        let dayNow = max(cal.component(.day, from: .now), 1)
+        let avgDay = oneTimeTotal(.expense) / Double(dayNow)
+        let forecast = spendingLeft - avgDay * Double(max(daysLeft - 1, 0))
+        let monthEnd = dayNow >= daysInMonth - 2
 
         let savingEntries = entries.filter { $0.kind == .saving }
         let piggy = savingEntries.reduce(0) { $0 + $1.savedSoFar }
@@ -175,8 +181,6 @@ struct OverviewView: View {
         return NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    monthPicker(tr)
-
                     // Fő kártya
                     VStack(spacing: 6) {
                         Text(tr("Költőpénz", "Spending money"))
@@ -219,6 +223,25 @@ struct OverviewView: View {
 
                     PiggyBankCard(saved: piggy, target: goalsTarget) { showDeposit = true }
 
+                    BudgetLimitCard()
+
+                    if monthEnd {
+                        Button {
+                            Haptics.tap()
+                            showRecap = true
+                        } label: {
+                            linkRow(tr("Hónap összegzése", "Month recap"), "chart.bar.doc.horizontal.fill")
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    NavigationLink {
+                        EntryListView(kind: .saving)
+                    } label: {
+                        linkRow(tr("Megtakarítási célok", "Savings goals"), EntryKind.saving.icon)
+                    }
+                    .buttonStyle(.plain)
+
                     // Fánk diagram
                     if !segs.isEmpty {
                         VStack(spacing: 14) {
@@ -238,10 +261,6 @@ struct OverviewView: View {
                         CategoryBreakdownCard(rows: catRows)
                     }
 
-                    if hasData {
-                        HistoryChartCard(points: historyPoints(tr))
-                    }
-
                     // Típusok, bevételhez viszonyítva
                     VStack(spacing: 14) {
                         ForEach(EntryKind.allCases) { k in
@@ -258,12 +277,10 @@ struct OverviewView: View {
                             HStack(spacing: 12) {
                                 statCard(tr("Megtakarítási ráta", "Savings rate"),
                                          savingsRate.formatted(.percent.precision(.fractionLength(0))))
-                                statCard(tr("Éves félretett", "Saved per year"), (savings * 12).ft)
+                                statCard(tr("Napi átlag költés", "Daily average"), avgDay.ft)
                             }
-                            HStack(spacing: 12) {
-                                statCard(tr("Éves előfizetés", "Subscriptions / year"), (subs * 12).ft)
-                                statCard(tr("Éves megmarad", "Left per year"), (left * 12).ft)
-                            }
+                            statCard(tr("Hó végére várhatóan marad", "Projected left by month end"),
+                                     forecast.ft)
                         }
                     }
 
@@ -343,14 +360,42 @@ struct OverviewView: View {
             .sheet(isPresented: $showQuick) { QuickAddView() }
             .sheet(isPresented: $showDeposit) { DepositView() }
             .sheet(isPresented: $showCalc) { GoalCalculatorView() }
+            .sheet(isPresented: $showRecap) { RecapView(embedded: true) }
             .onAppear {
                 sweep = 0
                 withAnimation(.easeOut(duration: 1.0)) { sweep = 1 }
             }
         }
+        .overlay {
+            if let c = celebration {
+                CelebrationView(celebration: c).id(c.id)
+            }
+        }
+        .onChange(of: piggy) { old, new in
+            guard new > old else { return }
+            let c = Celebration(ratio: 20, jackpot: false)
+            celebration = c
+            SlotSound.shared.play(.coin)
+            Haptics.success()
+            Task {
+                try? await Task.sleep(for: .seconds(3.5))
+                if celebration?.id == c.id { celebration = nil }
+            }
+        }
     }
 
     // MARK: Részek
+
+    private func linkRow(_ title: String, _ icon: String) -> some View {
+        HStack {
+            Label(title, systemImage: icon)
+            Spacer()
+            Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.secondary)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity)
+        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+    }
 
     private func monthPicker(_ tr: Tr) -> some View {
         HStack {

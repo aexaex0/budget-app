@@ -24,13 +24,13 @@ struct ContentView: View {
         let tr = store.tr
         TabView(selection: $selected) {
             Tab(tr("Áttekintés", "Overview"), systemImage: "chart.pie.fill", value: 0) {
-                OverviewView()
+                OverviewView().tabEntrance()
             }
             Tab(tr("Pénz", "Money"), systemImage: "banknote.fill", value: 1) {
-                MoneyView()
+                MoneyView().tabEntrance()
             }
             Tab(tr("Extrák", "Extras"), systemImage: "square.grid.2x2.fill", value: 2) {
-                ExtrasView()
+                ExtrasView().tabEntrance()
             }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
