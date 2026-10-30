@@ -139,11 +139,20 @@ struct DepositView: View {
     private func save() {
         let value = amount ?? 0
         let delta = withdraw ? -value : value
+        var applied = 0.0
         if let id = selectedID, let goal = goals.first(where: { $0.persistentModelID == id }) {
-            goal.savedSoFar = max(goal.savedSoFar + delta, 0)
+            let old = goal.savedSoFar
+            goal.savedSoFar = max(old + delta, 0)
+            applied = goal.savedSoFar - old
         } else {
+            applied = max(delta, 0)
             context.insert(Entry(name: "Piggy Bank", amount: 0, kind: .saving,
-                                 targetAmount: 0, savedSoFar: max(delta, 0)))
+                                 targetAmount: 0, savedSoFar: applied))
+        }
+        // A betett (vagy kivett) összeg a havi költőpénzből megy ki / jön vissza.
+        if applied != 0 {
+            context.insert(Entry(name: "Piggy Bank", amount: applied, kind: .saving,
+                                 isRecurring: false, date: .now))
         }
         Haptics.success()
         dismiss()

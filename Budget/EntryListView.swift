@@ -34,7 +34,7 @@ struct EntryListView: View {
     private var oneTimeThisMonth: Double {
         oneTime.filter { $0.counts(in: .now) }.reduce(0) { $0 + $1.amount }
     }
-    private var total: Double { recurringTotal + oneTimeThisMonth }
+    private var total: Double { supportsOneTime ? recurringTotal + oneTimeThisMonth : recurringTotal }
 
     var body: some View {
         let tr = store.tr

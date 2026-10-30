@@ -139,7 +139,10 @@ struct OverviewView: View {
         let left = income - expenses - subs - savings
         let savingsRate = income > 0 ? savings / income : 0
         let daysInMonth = Calendar.current.range(of: .day, in: .month, for: month)?.count ?? 30
-        let perDay = left / Double(daysInMonth)
+        let cal = Calendar.current
+        let isCurrent = cal.isDate(month, equalTo: .now, toGranularity: .month)
+        let daysLeft = isCurrent ? max(daysInMonth - cal.component(.day, from: .now) + 1, 1) : daysInMonth
+        let perDay = max(left, 0) / Double(daysLeft)
 
         let oneTimeSpent = oneTimeTotal(.expense)
         let allowance = left + oneTimeSpent
@@ -187,7 +190,7 @@ struct OverviewView: View {
                                 .font(.footnote)
                                 .foregroundStyle(.red)
                         } else if income > 0 {
-                            Text(tr("Napi keret: \(perDay.ft)", "Daily allowance: \(perDay.ft)"))
+                            Text(tr("Naponta költhető: \(perDay.ft)", "Per day left: \(perDay.ft)"))
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
