@@ -229,6 +229,8 @@ struct OverviewView: View {
 
                     PaydayCard(spendingLeft: spendingLeft)
 
+                    ChallengeCard()
+
                     BudgetLimitCard()
 
                     if monthEnd {
