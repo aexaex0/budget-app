@@ -1,9 +1,9 @@
 import Foundation
 
 /// Szimbólumok. A súlyok és a kifizetések úgy vannak beállítva, hogy a gép
-/// hosszú távon kb. 93%-ot fizessen vissza (mint egy valódi gép), tettől függetlenül.
+/// hosszú távon kb. 95%-ot fizessen vissza (mint egy valódi gép), tettől függetlenül.
 enum SlotSymbol: Int, CaseIterable {
-    case cherry, lemon, bell, star, diamond, seven, crown
+    case cherry, lemon, bell, star, diamond, seven, crown, wild
 
     var glyph: String {
         switch self {
@@ -14,37 +14,42 @@ enum SlotSymbol: Int, CaseIterable {
         case .diamond: "💎"
         case .seven: "7️⃣"
         case .crown: "👑"
+        case .wild: "🃏"
         }
     }
 
-    /// Előfordulási súly (összesen 100)
+    /// Előfordulási súly (összesen 102). A 🃏 wild bármit helyettesít (korona jackpotot nem).
     var weight: Int {
         switch self {
-        case .cherry: 28
+        case .cherry: 30
         case .lemon: 24
         case .bell: 18
-        case .star: 14
-        case .diamond: 9
-        case .seven: 5
+        case .star: 13
+        case .diamond: 8
+        case .seven: 4
         case .crown: 2
+        case .wild: 3
         }
     }
 
     /// Vonalkifizetés a vonaltét többszöröseként (3 egyforma a vonalon)
     var pay: Double {
         switch self {
-        case .cherry: 2
-        case .lemon: 4
-        case .bell: 10
-        case .star: 17
-        case .diamond: 45
-        case .seven: 140
-        case .crown: 450
+        case .cherry: 1.2
+        case .lemon: 2.4
+        case .bell: 6
+        case .star: 10
+        case .diamond: 28
+        case .seven: 85
+        case .crown: 280
+        case .wild: 60
         }
     }
 
+    static let totalWeight = SlotSymbol.allCases.reduce(0) { $0 + $1.weight }
+
     static func random() -> SlotSymbol {
-        var r = Int.random(in: 0..<100)
+        var r = Int.random(in: 0..<totalWeight)
         for s in SlotSymbol.allCases {
             if r < s.weight { return s }
             r -= s.weight
@@ -152,12 +157,14 @@ struct SlotOutcome {
         var winning: [Int] = []
         var units = 0.0
         for (i, line) in lines.enumerated() {
-            let a = grid[line[0].col][line[0].row]
-            let b = grid[line[1].col][line[1].row]
-            let c = grid[line[2].col][line[2].row]
-            if a == b && b == c {
+            let syms: [SlotSymbol] = line.map { grid[$0.col][$0.row] }
+            let plain: [SlotSymbol] = syms.filter { $0 != .wild }
+            if plain.isEmpty {
                 winning.append(i)
-                units += a.pay / 5.0
+                units += SlotSymbol.wild.pay / 5.0
+            } else if plain.allSatisfy({ $0 == plain[0] }) {
+                winning.append(i)
+                units += plain[0].pay / 5.0
             }
         }
         return SlotOutcome(grid: grid, winLines: winning, baseUnits: units,
