@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// Demó slot. Az egyenleg a havi megmaradásból indul, de csak a játékon belül létezik:
 /// semmi nem vonódik le a valódi pénzedből, és kilépéskor minden visszaáll.
@@ -174,9 +175,8 @@ struct SlotGameView: View {
         HStack(spacing: gap) {
             ForEach(0..<3, id: \.self) { col in
                 ReelColumn(strip: engine.strips[col],
-                           start: engine.reelStart[col],
+                           spinID: engine.spinIDs[col],
                            duration: engine.reelDur[col],
-                           spinning: engine.spinningCols[col],
                            bounce: engine.bounce[col],
                            wins: winCells(col))
                     .equatable()
@@ -288,64 +288,129 @@ struct SlotGameView: View {
     }
 }
 
-/// A tekercs Canvas-on rajzolódik, az állapotot az idő adja, nem a SwiftUI nézetfa.
-/// Így pörgetés közben nincs nézetfrissítés, csak egy sima rajzolás képkockánként.
+/// Emoji sprite-ok: egyszer rajzoljuk képpé, utána csak textúraként mozognak.
+enum EmojiSprites {
+    static let cell: CGFloat = 92
+    static let images: [Int: CGImage] = {
+        var out: [Int: CGImage] = [:]
+        let fmt = UIGraphicsImageRendererFormat()
+        fmt.scale = 3
+        fmt.opaque = false
+        let r = UIGraphicsImageRenderer(size: CGSize(width: cell, height: cell), format: fmt)
+        for s in SlotSymbol.allCases {
+            let img = r.image { _ in
+                let str = NSAttributedString(string: s.glyph,
+                                             attributes: [.font: UIFont.systemFont(ofSize: 46)])
+                let sz = str.size()
+                str.draw(at: CGPoint(x: (cell - sz.width) / 2, y: (cell - sz.height) / 2))
+            }
+            if let cg = img.cgImage { out[s.rawValue] = cg }
+        }
+        return out
+    }()
+}
+
+/// A tekercs Core Animation réteg: a mozgást a rendszer GPU-n animálja,
+/// a fő szál terhelésétől függetlenül, 120 Hz-en is simán.
+final class ReelUIView: UIView {
+    private let strip = CALayer()
+    var lastSpin = 0
+    private let cell = EmojiSprites.cell
+    private let gap: CGFloat = 10
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        clipsToBounds = true
+        strip.anchorPoint = CGPoint(x: 0, y: 0)
+        layer.addSublayer(strip)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func build(_ symbols: [SlotSymbol]) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        strip.removeAllAnimations()
+        strip.sublayers?.forEach { $0.removeFromSuperlayer() }
+        let step = cell + gap
+        strip.bounds = CGRect(x: 0, y: 0, width: cell, height: CGFloat(symbols.count) * step)
+        strip.position = .zero
+        for (i, sym) in symbols.enumerated() {
+            let l = CALayer()
+            l.frame = CGRect(x: 0, y: CGFloat(i) * step, width: cell, height: cell)
+            l.contentsScale = 3
+            l.contents = EmojiSprites.images[sym.rawValue]
+            strip.addSublayer(l)
+        }
+        CATransaction.commit()
+    }
+
+    func spin(_ symbols: [SlotSymbol], duration: Double) {
+        build(symbols)
+        let travel = CGFloat(max(symbols.count - 3, 0)) * (cell + gap)
+        let anim = CABasicAnimation(keyPath: "position.y")
+        anim.fromValue = -travel
+        anim.toValue = 0
+        anim.duration = duration
+        anim.timingFunction = CAMediaTimingFunction(controlPoints: 0.12, 0.45, 0.2, 1.0)
+        strip.add(anim, forKey: "spin")
+    }
+}
+
+struct ReelRepresentable: UIViewRepresentable {
+    let strip: [SlotSymbol]
+    let spinID: Int
+    let duration: Double
+
+    func makeUIView(context: Context) -> ReelUIView {
+        let v = ReelUIView(frame: .zero)
+        v.build(strip)
+        return v
+    }
+
+    func updateUIView(_ v: ReelUIView, context: Context) {
+        if spinID != v.lastSpin {
+            v.lastSpin = spinID
+            v.spin(strip, duration: duration)
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ReelUIView, context: Context) -> CGSize? {
+        CGSize(width: EmojiSprites.cell, height: EmojiSprites.cell * 3 + 20)
+    }
+}
+
 struct ReelColumn: View, Equatable {
     let strip: [SlotSymbol]
-    let start: Date
+    let spinID: Int
     let duration: Double
-    let spinning: Bool
     let bounce: Bool
     let wins: [Bool]
 
     private let cellSize: CGFloat = 92
     private let gap: CGFloat = 10
 
-    private func progress(at date: Date) -> Double {
-        let x = date.timeIntervalSince(start) / max(duration, 0.01)
-        if x <= 0 { return 0 }
-        if x >= 1 { return 1 }
-        return 1 - pow(1 - x, 2.4)
-    }
-
     var body: some View {
-        let step = cellSize + gap
-        let height = cellSize * 3 + gap * 2
-        TimelineView(.animation(minimumInterval: nil, paused: !spinning)) { ctx in
-            Canvas { context, size in
-                let p = progress(at: ctx.date)
-                let travel = Double(max(strip.count - 3, 0)) * Double(step)
-                let off = -(1 - p) * travel
-                // háttér cellák
-                for r in 0..<3 {
-                    let rect = CGRect(x: 0, y: CGFloat(r) * step, width: cellSize, height: cellSize)
-                    context.fill(Path(roundedRect: rect, cornerRadius: 18),
-                                 with: .color(Color.white.opacity(0.10)))
-                }
-                // tekercs
-                var clipped = context
-                clipped.clip(to: Path(CGRect(origin: .zero, size: size)))
-                for i in strip.indices {
-                    let y = Double(i) * Double(step) + off
-                    if y < -Double(step) || y > Double(height) { continue }
-                    if let sym = context.resolveSymbol(id: strip[i].rawValue) {
-                        clipped.draw(sym, at: CGPoint(x: cellSize / 2, y: y + Double(cellSize) / 2))
-                    }
-                }
-                // nyerő keretek
-                for r in 0..<3 where wins[r] {
-                    let rect = CGRect(x: 1.5, y: CGFloat(r) * step + 1.5,
-                                      width: cellSize - 3, height: cellSize - 3)
-                    context.stroke(Path(roundedRect: rect, cornerRadius: 17),
-                                   with: .color(.yellow), lineWidth: 3)
-                }
-            } symbols: {
-                ForEach(SlotSymbol.allCases, id: \.rawValue) { s in
-                    Text(s.glyph).font(.system(size: 46)).tag(s.rawValue)
+        ZStack {
+            VStack(spacing: gap) {
+                ForEach(0..<3, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(Color.white.opacity(0.10))
+                        .frame(width: cellSize, height: cellSize)
                 }
             }
+            ReelRepresentable(strip: strip, spinID: spinID, duration: duration)
+            VStack(spacing: gap) {
+                ForEach(0..<3, id: \.self) { row in
+                    RoundedRectangle(cornerRadius: 18)
+                        .strokeBorder(wins[row] ? Color.yellow : Color.clear, lineWidth: 3)
+                        .frame(width: cellSize, height: cellSize)
+                }
+            }
+            .allowsHitTesting(false)
         }
-        .frame(width: cellSize, height: height)
+        .frame(width: cellSize, height: cellSize * 3 + gap * 2)
         .offset(y: bounce ? 8 : 0)
         .animation(.spring(duration: 0.2, bounce: 0.5), value: bounce)
     }

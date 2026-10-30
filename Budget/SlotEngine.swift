@@ -22,7 +22,7 @@ final class SlotEngine: ObservableObject {
     @Published var bet: Int = 60
     @Published var grid: [[SlotSymbol]] = (0..<3).map { _ in (0..<3).map { _ in SlotSymbol.random() } }
     @Published var strips: [[SlotSymbol]] = (0..<3).map { _ in (0..<3).map { _ in SlotSymbol.random() } }
-    @Published var reelStart: [Date] = [.distantPast, .distantPast, .distantPast]
+    @Published var spinIDs: [Int] = [0, 0, 0]
     @Published var reelDur: [Double] = [1, 1, 1]
     @Published var sound = true {
         didSet { SlotSound.shared.enabled = sound }
@@ -100,14 +100,13 @@ final class SlotEngine: ObservableObject {
 
         // valódi görgetés: minden oszlop egy hosszú tekercs, ami legördül a végeredményig
         let stops: [Double] = [0.9, 1.4, 1.9].map { $0 * speed }
-        let now = Date()
         for c in 0..<3 {
             let rows = max(6, Int(stops[c] * 8))
             let filler = (0..<rows).map { _ in SlotSymbol.random() }
             let old = Array(strips[c].prefix(3))
             strips[c] = outcome.grid[c] + filler + old
             reelDur[c] = stops[c]
-            reelStart[c] = now
+            spinIDs[c] += 1
         }
         // az oszlopok balról jobbra állnak meg
         var elapsed = 0.0
