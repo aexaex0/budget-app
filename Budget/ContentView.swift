@@ -6,6 +6,8 @@ struct ContentView: View {
     @Environment(\.modelContext) private var context
     @Query private var all: [Entry]
     @State private var selected = 0
+    @EnvironmentObject private var router: Router
+    @Environment(\.scenePhase) private var scenePhase
 
     /// Ha ez változik, újraütemezzük az értesítéseket.
     private var syncKey: String {
@@ -18,6 +20,18 @@ struct ContentView: View {
     private var subInfos: [SubInfo] {
         all.filter { $0.kind == .subscription }
             .map { SubInfo(name: $0.name, day: $0.renewalDay, amount: $0.amount) }
+    }
+
+    /// A widget gombja elindítja az appot, a kérés kicsit később érkezhet meg.
+    private func consumeWidgetAction() async {
+        for _ in 0..<8 {
+            if let kind = Router.takePending() {
+                selected = 1
+                router.pendingAdd = kind
+                return
+            }
+            try? await Task.sleep(for: .seconds(0.3))
+        }
     }
 
     var body: some View {
@@ -35,6 +49,10 @@ struct ContentView: View {
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .onChange(of: selected) { _, _ in Haptics.tap(.soft) }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await consumeWidgetAction() } }
+        }
+        .task { await consumeWidgetAction() }
         .task {
             CategorySeed.seedIfNeeded(context, english: store.isEnglish)
         }

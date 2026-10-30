@@ -63,6 +63,7 @@ struct OverviewView: View {
     @State private var showCalc = false
     @State private var showRecap = false
     @State private var showPocketGame = false
+    @AppStorage("payday") private var payday = 28
     @State private var showStreak = false
     @AppStorage("streakNoSpend") private var noSpend = ""
     @State private var celebration: Celebration?
@@ -160,6 +161,7 @@ struct OverviewView: View {
         let avgDay = oneTimeTotal(.expense) / Double(dayNow)
         let forecast = spendingLeft - avgDay * Double(max(daysLeft - 1, 0))
         let monthEnd = dayNow >= daysInMonth - 2
+        let streakNow = StreakCalc.current(StreakCalc.days(entries: entries, noSpend: noSpend))
 
         let savingEntries = entries.filter { $0.kind == .saving }
         let piggy = savingEntries.reduce(0) { $0 + $1.savedSoFar }
@@ -386,6 +388,9 @@ struct OverviewView: View {
             if let c = celebration {
                 CelebrationView(celebration: c).id(c.id)
             }
+        }
+        .task(id: "\(spendingLeft)|\(piggy)|\(streakNow)|\(payday)") {
+            WidgetSync.push(spending: spendingLeft, piggy: piggy, streak: streakNow, payday: payday)
         }
         .onChange(of: piggy) { old, new in
             guard new > old else { return }

@@ -59,6 +59,9 @@ struct BudgetLimitCard: View {
             .glassCard(24)
         }
         .buttonStyle(.plain)
+        .task(id: "\(limit)|\(spent)|\(mode)") {
+            WidgetSync.push(budgetRemaining: limit - spent, budgetLimit: limit)
+        }
         .sheet(isPresented: $showEdit) { BudgetLimitEditor() }
     }
 }

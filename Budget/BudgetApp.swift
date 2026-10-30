@@ -4,6 +4,7 @@ import SwiftData
 @main
 struct BudgetApp: App {
     @StateObject private var store = ThemeStore()
+    @StateObject private var router = Router()
 
     var body: some Scene {
         WindowGroup {
@@ -11,6 +12,7 @@ struct BudgetApp: App {
                 ContentView()
             }
             .environmentObject(store)
+            .environmentObject(router)
             .preferredColorScheme(store.scheme)
             .tint(store.theme.accent.color)
         }

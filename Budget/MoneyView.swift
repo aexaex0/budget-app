@@ -15,6 +15,7 @@ struct MoneyView: View {
     @Query(sort: \Category.createdAt) private var categories: [Category]
     @State private var editing: Entry?
     @State private var newItem: MoneyNew?
+    @EnvironmentObject private var router: Router
 
     private func ordered(_ list: [Entry]) -> [Entry] {
         list.sorted { a, b in
@@ -78,9 +79,17 @@ struct MoneyView: View {
                 }
                 .padding(.bottom, 12)
             }
+            .onAppear(perform: handlePending)
+            .onChange(of: router.pendingAdd) { _, _ in handlePending() }
             .sheet(item: $newItem) { EntryEditor(kind: $0.kind, entry: nil, recurring: $0.recurring) }
             .sheet(item: $editing) { EntryEditor(kind: $0.kind, entry: $0) }
         }
+    }
+
+    private func handlePending() {
+        guard let k = router.pendingAdd else { return }
+        router.pendingAdd = nil
+        newItem = MoneyNew(kind: k == "income" ? .income : .expense, recurring: false)
     }
 
     private var rowBackground: some View {
