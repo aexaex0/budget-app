@@ -17,6 +17,7 @@ struct AchievementsView: View {
     @Query private var wishes: [WishItem]
     @Query private var categories: [Category]
     @AppStorage("budgetLimit") private var budgetLimit: Double = 0
+    @AppStorage("streakNoSpend") private var noSpend = ""
 
     private var list: [Achievement] {
         let tr = store.tr
@@ -27,6 +28,7 @@ struct AchievementsView: View {
         let skipped = wishes.filter { $0.statusRaw == "skipped" }
         let skippedSum = skipped.reduce(0) { $0 + $1.price }
         let limits = Double(categories.filter { $0.monthlyLimit > 0 }.count)
+        let streak = Double(StreakCalc.current(StreakCalc.days(entries: entries, noSpend: noSpend)))
         return [
             Achievement(id: "inc", icon: "arrow.down.circle.fill",
                         title: tr("Első bevétel", "First income"),
@@ -68,6 +70,18 @@ struct AchievementsView: View {
                         title: "Jackpot!",
                         detail: tr("Nyerj egy jackpotot", "Hit a jackpot"),
                         value: Double(Stats.get("jackpots")), target: 1),
+            Achievement(id: "st7", icon: "flame.fill",
+                        title: tr("Egy hét lángban", "A week on fire"),
+                        detail: tr("7 napos sorozat", "7 day streak"),
+                        value: streak, target: 7),
+            Achievement(id: "st30", icon: "flame.fill",
+                        title: tr("Havi sorozat", "Monthly streak"),
+                        detail: tr("30 napos sorozat", "30 day streak"),
+                        value: streak, target: 30),
+            Achievement(id: "pocket", icon: "circle.dotted",
+                        title: tr("Zsebdobó", "Pocket shooter"),
+                        detail: tr("20 érme a zsebbe", "20 coins in the pocket"),
+                        value: Double(Stats.get("pocket")), target: 20),
             Achievement(id: "bj", icon: "suit.spade.fill",
                         title: tr("Kártyaasztal", "Card table"),
                         detail: tr("20 blackjack kör", "20 blackjack hands"),

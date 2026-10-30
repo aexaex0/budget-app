@@ -62,6 +62,9 @@ struct OverviewView: View {
     @State private var showDeposit = false
     @State private var showCalc = false
     @State private var showRecap = false
+    @State private var showPocketGame = false
+    @State private var showStreak = false
+    @AppStorage("streakNoSpend") private var noSpend = ""
     @State private var celebration: Celebration?
     @State private var sweep: CGFloat = 0
     @State private var month: Date = OverviewView.monthStart(Date.now)
@@ -221,7 +224,10 @@ struct OverviewView: View {
 
                     MoneySplitCard(spending: spendingLeft, piggy: piggy)
 
-                    PiggyBankCard(saved: piggy, target: goalsTarget) { showDeposit = true }
+                    PiggyBankCard(saved: piggy, target: goalsTarget, onDeposit: { showDeposit = true },
+                                  onPlay: { showPocketGame = true })
+
+                    PaydayCard(spendingLeft: spendingLeft)
 
                     BudgetLimitCard()
 
@@ -349,6 +355,14 @@ struct OverviewView: View {
                         showQuick = true
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Haptics.tap()
+                        showStreak = true
+                    } label: {
+                        StreakBadge(count: StreakCalc.current(StreakCalc.days(entries: entries, noSpend: noSpend)))
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button(tr("Beállítások", "Settings"), systemImage: "gearshape.fill") {
                         Haptics.tap()
@@ -360,6 +374,8 @@ struct OverviewView: View {
             .sheet(isPresented: $showQuick) { QuickAddView() }
             .sheet(isPresented: $showDeposit) { DepositView() }
             .sheet(isPresented: $showCalc) { GoalCalculatorView() }
+            .sheet(isPresented: $showStreak) { StreakSheet() }
+            .fullScreenCover(isPresented: $showPocketGame) { PocketGameView() }
             .sheet(isPresented: $showRecap) { RecapView(embedded: true) }
             .onAppear {
                 sweep = 0
