@@ -16,6 +16,6 @@ struct BudgetApp: App {
             .preferredColorScheme(store.scheme)
             .tint(store.theme.accent.color)
         }
-        .modelContainer(for: [Entry.self, Category.self, WishItem.self]) // helyi tárolás az eszközön
+        .modelContainer(for: [Entry.self, Category.self, WishItem.self, Debt.self]) // helyi tárolás az eszközön
     }
 }

@@ -80,6 +80,15 @@ struct ExtrasView: View {
                     .buttonStyle(.plain)
 
                     NavigationLink {
+                        DebtsView()
+                    } label: {
+                        tile(icon: "arrow.left.arrow.right.circle.fill", color: .red,
+                             title: tr("Tartozások", "Debts"),
+                             subtitle: tr("Ki kinek tartozik", "Who owes whom"))
+                    }
+                    .buttonStyle(.plain)
+
+                    NavigationLink {
                         SplitView()
                     } label: {
                         tile(icon: "person.2.fill", color: .green,
