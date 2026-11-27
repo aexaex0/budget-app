@@ -1,0 +1,1 @@
+Savings PWA. Static HTML/CSS/JS. User data is stored locally in the browser under savings-v1; export backups regularly. Netlify: main branch, no build command, publish web. Original Swift project remains outside web.
